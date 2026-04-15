@@ -1,15 +1,20 @@
 # 🛡️ hide.me VPN Manager GUI (Linux)
 
+[![Python Version](https://img.shields.io/badge/python-3.6%2B-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ![hide.me VPN Manager GUI](gui_main_1.png)
 
 A modern, highly interactive, and feature-rich Graphical User Interface (GUI) for the official **hide.me VPN Linux CLI**. Built with Python and PyQt6, this application seamlessly bridges the raw power of the terminal with a beautiful, customizable desktop experience.
 
 ## 📖 The Story Behind This Project
 
-This project was born out of a simple need: **I wanted a comfortable, graphical way to use the official hide.me CLI on Linux.** 
-While the command-line interface provided by hide.me is incredibly powerful and fast, manually managing WireGuard connections, configuring split tunneling, and toggling kill switches via terminal commands isn't always the most convenient workflow for daily desktop use. 
+While hide.me provides beautiful, fully-featured official GUI applications for Windows and macOS, **Linux users have historically been left with only a command-line interface.** 
 
-I envisioned a modern dashboard that brings all these CLI features into a clean, mouse-driven interface without losing the underlying security and performance of the official client.
+This project was born out of a simple need: I wanted a comfortable, graphical way to use the official hide.me CLI on Linux. While the terminal CLI is incredibly powerful and fast, manually managing WireGuard connections, configuring split tunneling, and toggling kill switches via commands isn't always the most convenient workflow for daily desktop use. 
+
+I envisioned a modern dashboard that brings all these features into a clean, mouse-driven interface without losing the underlying security and performance of the official client.
 
 🧠 **AI-Assisted Development:** 
 This entire application—from the PyQt6 interface and interactive Leaflet mapping to the complex subprocess management and deep IPv4/IPv6 routing cleanups—was extensively designed, written, and refined with the help of **Gemini 3.1 Pro Thinking**. It stands as a great example of how advanced AI reasoning can help bridge the gap between complex CLI tools and user-friendly desktop applications.
@@ -46,7 +51,7 @@ This entire application—from the PyQt6 interface and interactive Leaflet mappi
 Because this application functions as a wrapper for the official client and modifies network interfaces, routing tables, and DNS settings, it **requires a Linux environment and root (`sudo`) privileges.**
 
 * **OS:** Linux (Tested on Ubuntu/Debian-based distributions)
-* **Python:** Python 3.8 or higher
+* **Python:** Python 3.6+ (Python 3.8+ recommended for PyQt6)
 * **hide.me CLI:** The app will automatically download and install the official CLI via the hide.me install script if it isn't found on your system.
 
 ### Libraries
@@ -96,5 +101,7 @@ If you encounter any issues or have feature requests, please open an issue on th
 ---
 
 ## 📄 License & Disclaimer
+
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
 *This project is open-source and created by a passionate user for the Linux community. It is an unofficial GUI wrapper and is **not** officially affiliated with, endorsed by, or maintained by hide.me VPN or eVenture Ltd. Use at your own risk.*
