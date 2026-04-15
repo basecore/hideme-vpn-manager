@@ -1,4 +1,4 @@
-# 🛡️ Hide.me VPN Manager for Linux
+# 🛡️ hide.me VPN Manager for Linux
 
 [![Python Version](https://img.shields.io/badge/python-3.6%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)]()
@@ -12,6 +12,19 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
 
 ---
 
+## 📸 Screenshots
+
+<div align="center">
+  <img src="gui1.png" alt="Main Interface & Network Settings" width="400"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="gui2.png" alt="Security Filters & Advanced Options" width="400"/>
+</div>
+
+*Left: The Main Dashboard showing real-time IP, Location, and Split-Tunneling Network Tab.*  
+*Right: The Advanced Options and Security Filters (Ad-Blocker, Custom DNS, Configs).*
+
+---
+
 ## ✨ Features
 
 * 🎨 **Modern Brand Design:** Matches the official hide.me dark mode aesthetics (Deep Navy & Bright Turquoise).
@@ -22,12 +35,6 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
 * 🛑 **Safe Auto-Disconnect:** When you close the app, it automatically safely disconnects the VPN and restores your original DNS and routing tables to prevent internet dropouts.
 * 🛡️ **1-Click Security Filters:** Toggle ad-blockers, malware protection, tracking protection, and forced SafeSearch directly from the UI.
 * 🌍 **Live IP & Geolocation:** Displays your current IP address and physical location (City, Country) in real-time.
-
----
-
-## 📸 Screenshots
-
-*(You can add a screenshot of your GUI here later by placing an image in your repo and linking it like this: `![Main GUI](screenshot.png)`)*
 
 ---
 
@@ -45,8 +52,8 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
 
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/YourUsername/HideMe-Linux-GUI.git
-cd HideMe-Linux-GUI
+git clone https://github.com/YourUsername/hideme-vpn-manager.git
+cd hideme-vpn-manager
 ```
 
 **2. Run the application:**
@@ -85,6 +92,6 @@ All VPN connections, encryption, and routing are handled entirely by the officia
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/YourUsername/HideMe-Linux-GUI/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/YourUsername/hideme-vpn-manager/issues).
 
 If you like this project, please consider giving it a ⭐!
