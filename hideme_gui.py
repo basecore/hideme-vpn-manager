@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v26)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v27)
 # ==============================================================================
-__version__ = "26.0.0"
+__version__ = "27.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -91,7 +91,7 @@ SERVER_LIST = {
 }
 
 def get_local_subnet():
-    if sys.platform == "win32": return "192.168.178.0/24 (Preview)"
+    if sys.platform == "win32": return "192.168.178.0/24"
     try:
         route_out = subprocess.check_output(["ip", "route"]).decode()
         default_iface = next((l.split()[l.split().index("dev")+1] for l in route_out.splitlines() if l.startswith("default") and "dev" in l), None)
@@ -455,7 +455,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
-        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues"))
+        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
@@ -776,27 +776,33 @@ class HideMeOfficialUI(QMainWindow):
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
         
-        # 2. Kill Switch Tab
+        # 2. Kill Switch Tab (Now focuses on LAN logic properly)
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
         self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)"); self.chk_kill.setChecked(True)
-        self.chk_lan = QCheckBox("Allow local network connections")
+        self.chk_lan = QCheckBox("Allow local network connections (LAN access)")
+        self.chk_lan.setChecked(True) # Usually a desired default
         l_kill.addWidget(self.chk_kill); l_kill.addWidget(self.chk_lan)
         l_kill.addWidget(QLabel("\nExecute custom script when triggered:", objectName="CardTitle"))
         l_kill.addWidget(QLineEdit("/path/to/script.sh"))
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
         
-        # 3. Filters Tab
+        # 3. Filters & Routing Tab (Split Tunneling conceptually separated)
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
-        self.chk_split = QCheckBox("Enable Split Tunneling (-s)"); self.chk_split.setChecked(True)
-        self.inp_subnet = QLineEdit(get_local_subnet())
+        
+        l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
+        self.chk_split = QCheckBox("Exclude specific external IP addresses or subnets (-s)")
+        self.inp_subnet = QLineEdit()
+        self.inp_subnet.setPlaceholderText("e.g. 8.8.8.8/32, 10.0.0.0/8")
         l_filt.addWidget(self.chk_split); l_filt.addWidget(self.inp_subnet)
+        
         l_filt.addWidget(QLabel("\nStealthGuard & Server Filters:", objectName="CardTitle"))
         self.chk_pf = QCheckBox("Port Forwarding (-pf)")
         self.chk_track = QCheckBox("Block Trackers (-noTrackers)"); self.chk_track.setChecked(True)
         self.chk_ads = QCheckBox("Block Ads (-noAds)")
         self.chk_malware = QCheckBox("Block Malware (-noMalware)")
         for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware]: l_filt.addWidget(c)
-        l_filt.addStretch(); tabs.addTab(t_filt, "Features")
+        
+        l_filt.addStretch(); tabs.addTab(t_filt, "Routing & Filters")
 
         # 4. Advanced Tab
         t_adv = QWidget(); l_adv = QVBoxLayout(t_adv)
@@ -879,7 +885,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_git = QPushButton("⭐ View GitHub Repository")
         btn_git.setFixedHeight(40)
-        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager"))
+        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager"))
         
         card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git)
         card.layout.addStretch()
@@ -1147,14 +1153,33 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): feats.append("NoAds")
         if hasattr(self, 'chk_track') and self.chk_track.isChecked(): feats.append("NoTrack")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): feats.append("NoMalware")
+        
+        split_targets = []
+        if hasattr(self, 'chk_lan') and self.chk_lan.isChecked():
+            feats.append("LAN-Bypass")
+            local_sub = get_local_subnet()
+            if sys.platform == "win32":
+                split_targets.append("192.168.178.0/24")
+            elif local_sub:
+                split_targets.append(local_sub)
+                
+        if hasattr(self, 'chk_split') and self.chk_split.isChecked():
+            custom_split = self.inp_subnet.text().strip()
+            if custom_split:
+                feats.append("Custom-Split")
+                split_targets.append(custom_split)
+
         self.current_features_str = ", ".join(feats) if feats else "None"
         
         if sys.platform == "win32": 
             self.update_ui_state(True); return
 
         cmd = ["sudo", "hide.me"]
-        if hasattr(self, 'chk_split') and self.chk_split.isChecked() and self.inp_subnet.text().strip(): 
-            cmd.extend(["-s", self.inp_subnet.text().strip()])
+        
+        # Add the split targets appropriately using standard comma separation
+        if split_targets:
+            cmd.extend(["-s", ",".join(split_targets)])
+            
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
         if hasattr(self, 'chk_kill') and not self.chk_kill.isChecked(): cmd.append("-k=false")
