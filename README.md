@@ -30,11 +30,12 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
 * 🎨 **Modern Brand Design:** Matches the official hide.me dark mode aesthetics (Deep Navy & Bright Turquoise).
 * 🚀 **Zero-Setup Auto-Installer:** Checks if the hide.me CLI is installed upon startup. If not, it automatically downloads and installs it for you.
 * 🔄 **Smart Updates:** Built-in version checker pings the GitHub API to notify you of CLI updates and installs them with one click.
-* 🎲 **Random Server Picker:** Instantly connect to a random free server without having to choose manually.
+* 🌍 **Visual Server Selection:** Easily pick your desired location using intuitive country flags (e.g., 🇩🇪, 🇫🇷, 🇺🇸) or hit the **Random Server Picker** to instantly connect to a random free server.
 * 🔀 **Intelligent Split Tunneling (-s):** Automatically detects your local home subnet (e.g., `192.168.178.0/24`) so you can stay connected to your NAS, Home Assistant, and local printers while the VPN is active.
-* 🛑 **Safe Auto-Disconnect:** When you close the app, it automatically safely disconnects the VPN and restores your original DNS and routing tables to prevent internet dropouts.
+* 🛑 **Safe Close Warning:** If you accidentally close the app while connected, it prompts a safety warning to prevent you from suddenly browsing unprotected. Once confirmed, it safely disconnects and restores your routing tables.
 * 🛡️ **1-Click Security Filters:** Toggle ad-blockers, malware protection, tracking protection, and forced SafeSearch directly from the UI.
-* 🌍 **Live IP & Geolocation:** Displays your current IP address and physical location (City, Country) in real-time.
+* 📍 **Live IP & Geolocation:** Displays your current IP address and physical location (City, Country) in real-time.
+* 🐧 **Linux OS Guard:** Prevents accidental crashes if the script is run on Windows or macOS by displaying a clean UI notification.
 
 ---
 
@@ -52,7 +53,7 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
 
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/YourUsername/hideme-vpn-manager.git
+git clone https://github.com/basecore/hideme-vpn-manager.git
 cd hideme-vpn-manager
 ```
 
@@ -69,16 +70,19 @@ If you don't have the `hide.me` CLI installed yet, the GUI will prompt you and h
 
 ## ⚙️ How It Works (The Tabs)
 
-The GUI is divided into three easy-to-use tabs:
+The GUI is divided into four easy-to-use tabs:
 
 ### 1. Network
 Manage how your traffic flows. Enable **Split Tunneling** (the app auto-fills your subnet), toggle the **Kill-Switch**, enable **Port-Forwarding**, or force specific tunneling protocols (IPv4 / IPv6).
 
-### 2. Security & Filters
+### 2. Filters
 Hide.me offers powerful server-side filtering. Use this tab to block Ads, Malware, and Trackers before they even reach your computer. You can also force `hide.me` DNS servers to prevent DNS leaks.
 
 ### 3. Advanced
-For power users. Load a custom `.yaml` configuration file, change the path to your Access Token, or specify custom DNS servers (like Cloudflare's `1.1.1.1`). You can also manually check for CLI updates here.
+For power users. Load a custom `.yaml` configuration file, change the path to your Access Token, specify custom DNS servers (like Cloudflare's `1.1.1.1`), and manage startup update checks.
+
+### 4. About
+Quick access to the GitHub repository and issue tracker for reporting bugs or requesting new features.
 
 ---
 
@@ -92,6 +96,6 @@ All VPN connections, encryption, and routing are handled entirely by the officia
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/YourUsername/hideme-vpn-manager/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/basecore/hideme-vpn-manager/issues).
 
 If you like this project, please consider giving it a ⭐!
