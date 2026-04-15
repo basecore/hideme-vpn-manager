@@ -6,7 +6,7 @@
 
 A modern, sleek, and feature-rich Graphical User Interface (GUI) for the official `hide.me` Linux CLI client. 
 
-While the official hide.me CLI is incredibly powerful, remembering and typing out long strings of flags for split-tunneling, ad-blocking, and custom DNS can be tedious. This tool wraps all that functionality into a beautiful, dark-mode desktop application built purely with Python's built-in `tkinter`.
+While the official hide.me CLI is incredibly powerful, remembering and typing out long strings of flags for split-tunneling, ad-blocking, and custom DNS can be tedious. This tool wraps all that functionality into a beautiful desktop application built with Python. 
 
 ✨ *Proudly generated and engineered with the help of **Gemini 3.1 Pro Thinking** to provide a superior, user-friendly desktop alternative to terminal-only VPN management on Linux.*
 
@@ -20,32 +20,38 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
   <img src="gui2.png" alt="Security Filters & Advanced Options" width="400"/>
 </div>
 
-*Left: The Main Dashboard showing real-time IP, Location, and Split-Tunneling Network Tab.*  
-*Right: The Advanced Options and Security Filters (Ad-Blocker, Custom DNS, Configs).*
+*Left: The Main Dashboard showing real-time IP, Location, and Split-Tunneling.*  
+*Right: The Advanced Options, Automation settings, and Filters.*
 
 ---
 
 ## ✨ Features
 
-* 🎨 **Modern Brand Design:** Matches the official hide.me dark mode aesthetics (Deep Navy & Bright Turquoise).
+* 🎨 **Brand Design & Accessibility:** Matches the official hide.me dark mode aesthetics. Features form-based, high-contrast status icons (🛡️/⚠️) designed to be **100% colorblind-friendly**.
+* ⬇️ **System Tray Integration:** Minimize the app to your taskbar! The dynamic tray icon shows your connection status at a glance. Right-click the icon to instantly connect, disconnect, or quit.
+* ⚙️ **Full Automation:** Enable **"Launch on system startup"** to securely start the app in the background without typing your sudo password, and toggle **"Auto-connect"** to be protected the second you boot up.
 * 🚀 **Zero-Setup Auto-Installer:** Checks if the hide.me CLI is installed upon startup. If not, it automatically downloads and installs it for you.
-* 🔄 **Smart Updates:** Built-in version checker pings the GitHub API to notify you of CLI updates and installs them with one click.
-* 🌍 **Visual Server Selection:** Easily pick your desired location using intuitive country flags (e.g., 🇩🇪, 🇫🇷, 🇺🇸) or hit the **Random Server Picker** to instantly connect to a random free server.
-* 🔀 **Intelligent Split Tunneling (-s):** Automatically detects your local home subnet (e.g., `192.168.178.0/24`) so you can stay connected to your NAS, Home Assistant, and local printers while the VPN is active.
-* 🛑 **Safe Close Warning:** If you accidentally close the app while connected, it prompts a safety warning to prevent you from suddenly browsing unprotected. Once confirmed, it safely disconnects and restores your routing tables.
+* 🔄 **Smart Updates:** Built-in version checker pings the GitHub API to notify you of CLI updates.
+* 🌍 **Visual Server Selection:** Easily pick your desired location using intuitive country flags (e.g., 🇩🇪, 🇫🇷) or use the **Random Server Picker**.
+* 🔀 **Intelligent Split Tunneling (-s):** Automatically detects your local home subnet (e.g., `192.168.178.0/24`) so you can stay connected to your local network devices (NAS, printers).
+* 🛑 **Safe Close Warning:** Prevents accidental unprotected browsing by warning you if you try to close the app while the VPN is active.
 * 🛡️ **1-Click Security Filters:** Toggle ad-blockers, malware protection, tracking protection, and forced SafeSearch directly from the UI.
-* 📍 **Live IP & Geolocation:** Displays your current IP address and physical location (City, Country) in real-time.
-* 🐧 **Linux OS Guard:** Prevents accidental crashes if the script is run on Windows or macOS by displaying a clean UI notification.
+* 📍 **Live IP & Geolocation:** Displays your current IP address and physical location in real-time.
+* 🐧 **Linux OS Guard:** Prevents accidental crashes if the script is run on Windows or macOS.
 
 ---
 
-## 🛠️ Prerequisites
+## 🛠️ Prerequisites & Python Installation
 
-* A Linux-based Operating System (Ubuntu, Linux Mint, Debian, Arch, etc.)
-* Python 3 installed
-* Root/Sudo privileges (Required by the hide.me CLI to modify network routes and interfaces)
+To run this tool, you need a Linux-based Operating System (Ubuntu, Linux Mint, Debian, Arch, etc.) and **Python 3** with `tkinter` installed.
 
-*(Note: The script uses the `requests` library for IP geolocation. If it's missing, the script will automatically install it via `pip` on its first run!)*
+Most Linux distributions come with Python pre-installed, but often lack the GUI library (`tkinter`) and the package manager (`pip`). 
+
+**Open your terminal and run the following command to install everything you need (Ubuntu/Linux Mint/Debian):**
+```bash
+sudo apt update && sudo apt install python3 python3-pip python3-tk -y
+```
+*(Note: The script also uses `requests`, `Pillow`, and `pystray`. If these are missing, the GUI will automatically download and install them for you on its first run!)*
 
 ---
 
@@ -64,7 +70,7 @@ sudo python3 vpn_gui.py
 ```
 
 **3. First Run:**
-If you don't have the `hide.me` CLI installed yet, the GUI will prompt you and handle the entire installation process in the background. Simply follow the on-screen instructions!
+If you don't have the `hide.me` CLI installed yet, the GUI will prompt you and handle the entire installation process in the background.
 
 ---
 
@@ -79,7 +85,7 @@ Manage how your traffic flows. Enable **Split Tunneling** (the app auto-fills yo
 Hide.me offers powerful server-side filtering. Use this tab to block Ads, Malware, and Trackers before they even reach your computer. You can also force `hide.me` DNS servers to prevent DNS leaks.
 
 ### 3. Advanced
-For power users. Load a custom `.yaml` configuration file, change the path to your Access Token, specify custom DNS servers (like Cloudflare's `1.1.1.1`), and manage startup update checks.
+For power users. Setup **Autostart & Auto-connect**, load a custom `.yaml` configuration file, change your Access Token path, or specify custom DNS servers (like Cloudflare's `1.1.1.1`).
 
 ### 4. About
 Quick access to the GitHub repository and issue tracker for reporting bugs or requesting new features.
