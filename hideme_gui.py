@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v50)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v51)
 # ==============================================================================
-__version__ = "50.0.0"
+__version__ = "51.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -68,7 +68,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTableWidgetItem, QHeaderView, QAbstractItemView, 
                              QInputDialog, QDialog, QDialogButtonBox, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction, QFont
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction, QFont, QPalette
 
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -113,20 +113,29 @@ def get_local_subnet():
     return "192.168.178.0/24"
 
 def cleanup_zombie_network():
+    # DEEP CLEAN - Now correctly handling both IPv4 and IPv6 to fix the 'file exists' errors!
     try:
+        subprocess.run(["sudo", "killall", "hide.me"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        time.sleep(0.3)
         subprocess.run(["sudo", "killall", "-9", "hide.me"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        subprocess.run(["sudo", "ip", "route", "flush", "table", "55555"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         
-        out = subprocess.check_output(["ip", "-4", "rule", "show"]).decode()
-        for line in out.splitlines():
-            if "lookup 55555" in line:
-                subprocess.run(["sudo", "ip", "-4", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
-                
-        out_v6 = subprocess.check_output(["ip", "-6", "rule", "show"]).decode()
-        for line in out_v6.splitlines():
-            if "lookup 55555" in line:
-                subprocess.run(["sudo", "ip", "-6", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
+        subprocess.run(["sudo", "ip", "-4", "route", "flush", "table", "55555"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        subprocess.run(["sudo", "ip", "-6", "route", "flush", "table", "55555"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        
+        try:
+            out = subprocess.check_output(["ip", "-4", "rule", "show"]).decode()
+            for line in out.splitlines():
+                if "lookup 55555" in line:
+                    subprocess.run(["sudo", "ip", "-4", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
+        except: pass
+        
+        try:
+            out_v6 = subprocess.check_output(["ip", "-6", "rule", "show"]).decode()
+            for line in out_v6.splitlines():
+                if "lookup 55555" in line:
+                    subprocess.run(["sudo", "ip", "-6", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
+        except: pass
     except: pass
 
 class QtLogger(logging.Handler):
@@ -151,8 +160,8 @@ class VpnProcessReaderThread(QThread):
             else:
                 time.sleep(0.1)
         if self.process and self.process.poll() is not None and self.process.poll() != 0:
-            if self.process.poll() != -9:
-                self.new_log.emit(f"⚠️ CLI Process exited unexpectedly with code {self.process.poll()}")
+            if self.process.poll() != -9 and self.process.poll() != -15:
+                self.new_log.emit(f"⚠️ CLI Process exited with code {self.process.poll()}")
 
 class VpnMonitorThread(QThread):
     state_changed = pyqtSignal(bool)
@@ -1012,6 +1021,12 @@ class HideMeOfficialUI(QMainWindow):
         btn_bg = "#2BAEE0" if is_dark else "#27B4E6"
         btn_hover = "#1A9BD0" if is_dark else "#1DA1D1"
         
+        # PURE Qt Palette approach for Checkboxes - Guarantees a white box with a dark tick always
+        palette = QApplication.palette()
+        palette.setColor(QPalette.ColorRole.Base, QColor("#FFFFFF")) # White Checkbox Box
+        palette.setColor(QPalette.ColorRole.Text, QColor("#0F172A")) # Dark Blue Checkmark
+        QApplication.setPalette(palette)
+        
         css = f"""
             QMainWindow, #MainContent, QDialog {{ background-color: {bg_main}; }}
             #TopBar {{ background-color: {bg_top}; }}
@@ -1029,11 +1044,7 @@ class HideMeOfficialUI(QMainWindow):
             #ConnectBtn {{ background-color: {btn_bg}; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px; }}
             #ConnectBtn:hover {{ background-color: {btn_hover}; }}
             
-            /* Remove explicit indicator styling so standard system rendering takes over! */
             QLabel, QCheckBox, QRadioButton {{ color: {text_main}; font-size: 13px; }}
-            QCheckBox::indicator, QRadioButton::indicator {{
-                /* Removing background/border styling lets Qt use its native checkmarks again */
-            }}
             
             QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; font-weight: 500; }}
             QComboBox QAbstractItemView {{ background-color: {bg_main}; color: {text_main}; selection-background-color: {btn_bg}; }}
@@ -1190,10 +1201,15 @@ class HideMeOfficialUI(QMainWindow):
     def disconnect_vpn(self):
         try:
             if self.vpn_subprocess:
-                self.vpn_subprocess.kill()
+                # Let the hide.me CLI clean up its own routes gracefully!
+                self.vpn_subprocess.terminate()
+                try:
+                    self.vpn_subprocess.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.vpn_subprocess.kill()
                 self.vpn_subprocess = None
             
-            # Deep Cleanup
+            # Deep Cleanup as a fallback, now with IPv6
             cleanup_zombie_network()
         except: pass
 
@@ -1314,6 +1330,9 @@ if __name__ == '__main__':
         
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
+    # Use Fusion Engine for 100% native rendering without CSS conflicts
+    app.setStyle("Fusion")
     
     default_font = QApplication.font()
     sys_family = default_font.family()
