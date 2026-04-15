@@ -368,6 +368,10 @@ class HideMeOfficialUI(QMainWindow):
         QTimer.singleShot(2000, self.run_auto_update_if_enabled)
         self.fetch_ip(False)
 
+        if self.app_settings.get("auto_connect", False):
+            # Startet die Verbindung 1 Sekunde nach App-Start
+            QTimer.singleShot(1000, lambda: self.connect_vpn(None))
+
     def init_logger(self):
         self.logger = logging.getLogger("hide_me_gui")
         self.logger.setLevel(logging.DEBUG)
@@ -904,6 +908,47 @@ class HideMeOfficialUI(QMainWindow):
         self.app_settings["incognito_mode"] = self.chk_incognito.isChecked()
         self.save_app_settings()
 
+    def toggle_auto_connect(self):
+    self.app_settings["auto_connect"] = self.chk_autoconnect.isChecked()
+    self.save_app_settings()
+
+    def toggle_auto_start(self):
+        import os
+        is_enabled = self.chk_autostart.isChecked()
+        self.app_settings["auto_start"] = is_enabled
+        self.save_app_settings()
+        
+        # Erstellt oder löscht den Linux-Autostart-Eintrag
+        autostart_dir = os.path.expanduser("~/.config/autostart")
+        desktop_file = os.path.join(autostart_dir, "hidemegui.desktop")
+        
+        if is_enabled:
+            os.makedirs(autostart_dir, exist_ok=True)
+            script_path = os.path.abspath(__file__)
+            # Öffnet ein Terminal für die sudo-Passworteingabe beim Start
+            desktop_content = f"""[Desktop Entry]
+    Type=Application
+    Exec=x-terminal-emulator -e "sudo python3 {script_path}"
+    Hidden=false
+    NoDisplay=false
+    X-GNOME-Autostart-enabled=true
+    Name=hide.me VPN
+    Comment=Start hide.me VPN Manager on login
+    """
+            with open(desktop_file, "w") as f:
+                f.write(desktop_content)
+        else:
+            if os.path.exists(desktop_file):
+                os.remove(desktop_file)
+
+    def toggle_auto_update(self):
+        self.app_settings["auto_update"] = self.chk_autoupdate.isChecked()
+        self.save_app_settings()
+    
+    def toggle_notif(self):
+        self.app_settings["notifications"] = self.chk_notif.isChecked()
+        self.save_app_settings()
+
     def wipe_traces(self):
         if self.app_settings.get("incognito_mode", False):
             self.log_entries = []
@@ -922,12 +967,24 @@ class HideMeOfficialUI(QMainWindow):
         t_opts = QWidget(); l_opts = QVBoxLayout(t_opts)
         
         self.chk_autostart = QCheckBox("Launch hide.me on system startup")
-        self.chk_autoconnect = QCheckBox("Auto-connect VPN on app launch")
-        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup"); self.chk_autoupdate.setChecked(True)
-        self.chk_notif = QCheckBox("Enable Native Desktop Notifications"); self.chk_notif.setChecked(True)
-        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)"); self.chk_tray.setChecked(True)
-        self.chk_tray.stateChanged.connect(self.toggle_tray_visibility)
+        self.chk_autostart.setChecked(self.app_settings.get("auto_start", False))
+        self.chk_autostart.stateChanged.connect(self.toggle_auto_start)
         
+        self.chk_autoconnect = QCheckBox("Auto-connect VPN on app launch")
+        self.chk_autoconnect.setChecked(self.app_settings.get("auto_connect", False))
+        self.chk_autoconnect.stateChanged.connect(self.toggle_auto_connect)
+        
+        self.chk_autautoupdate = QCheckBox("Auto-check and install CLI updates on startup")
+        self.chk_autoupdate.setChecked(self.app_settings.get("auto_update", True))
+        self.chk_autoupdate.stateChanged.connect(self.toggle_auto_update)
+        
+        self.chk_notif = QCheckBox("Enable Native Desktop Notifications")
+        self.chk_notif.setChecked(self.app_settings.get("notifications", True))
+        self.chk_notif.stateChanged.connect(self.toggle_notif)
+        
+        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)")
+        self.chk_tray.setChecked(self.app_settings.get("tray_icon", True))
+        self.chk_tray.stateChanged.connect(self.toggle_tray_visibility)
         l_opts.addWidget(QLabel("Automation Setup:", objectName="CardTitle"))
         for c in [self.chk_autostart, self.chk_autoconnect, self.chk_autoupdate]: l_opts.addWidget(c)
         l_opts.addWidget(QLabel("\nDesktop Integration:", objectName="CardTitle"))
@@ -1093,6 +1150,11 @@ class HideMeOfficialUI(QMainWindow):
         QApplication.instance().quit()
 
     def toggle_tray_visibility(self):
+        # Diese zwei Zeilen neu hinzufügen:
+        self.app_settings["tray_icon"] = self.chk_tray.isChecked()
+        self.save_app_settings()
+        
+        # Der Rest bleibt gleich:
         if self.chk_tray.isChecked(): self.tray_icon.show()
         else: self.tray_icon.hide()
 
