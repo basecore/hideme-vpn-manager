@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v38)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v44)
 # ==============================================================================
-__version__ = "38.0.0"
+__version__ = "44.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -12,7 +12,6 @@ import subprocess
 import time
 import random
 import json
-import webbrowser
 import traceback
 import logging
 import shutil
@@ -35,7 +34,16 @@ try:
 except ImportError: 
     pass
 
-# --- Smart Auto-Installer for System Dependencies ---
+def open_os_url(url):
+    try:
+        user = os.environ.get('SUDO_USER')
+        if user:
+            subprocess.Popen(['sudo', '-u', user, 'xdg-open', url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(['xdg-open', url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Failed to open URL: {e}")
+
 def auto_install_dependencies():
     missing = False
     try:
@@ -48,33 +56,17 @@ def auto_install_dependencies():
         print("\n" + "="*70)
         print(" 🔄 DOWNLOADING MISSING PACKAGES (AUTO-INSTALLING) 🔄")
         print("="*70)
-        
         if shutil.which("apt"):
-            # fonts-noto-color-emoji fixes the missing flags in Ubuntu/Mint!
             packages = ["python3-pyqt6", "python3-pyqt6.qtwebengine", "python3-requests", "fonts-noto-color-emoji"]
-            print("Ubuntu / Linux Mint detected.")
-            print("For maximum transparency - the following official system packages will now be installed:")
-            for pkg in packages:
-                print(f"  -> {pkg}")
-            print("\nStarting 'apt-get install' in the background...\n")
-            
             try:
                 subprocess.run(["apt-get", "update", "-qq"], check=True)
                 subprocess.run(["apt-get", "install", "-y"] + packages, check=True)
-                
-                print("\n✅ Installation successful! Restarting application seamlessly...\n")
-                print("="*70)
                 os.execv(sys.executable, [sys.executable] + sys.argv)
-                
-            except subprocess.CalledProcessError as e:
-                print(f"\n❌ Error during automatic installation: {e}")
-                print(f"sudo apt update && sudo apt install -y {' '.join(packages)}")
+            except subprocess.CalledProcessError:
                 sys.exit(1)
         else:
-            print("Please install PyQt6 manually.")
             sys.exit(1)
 
-# Run the auto-installer before anything else
 auto_install_dependencies()
 
 import requests
@@ -87,9 +79,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTableWidgetItem, QHeaderView, QAbstractItemView, 
                              QInputDialog, QDialog, QDialogButtonBox, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction, QFont
 
-# --- WebEngine for Map ---
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import QWebEnginePage
@@ -99,7 +90,6 @@ try:
         def __init__(self, parent, connect_callback):
             super().__init__(parent)
             self.connect_callback = connect_callback
-
         def acceptNavigationRequest(self, url, _type, isMainFrame):
             if url.scheme() == "hideme":
                 self.connect_callback(url.host())
@@ -108,7 +98,6 @@ try:
 except ImportError:
     WEB_ENGINE_AVAILABLE = False
 
-# --- Configuration Paths ---
 CONFIG_DIR = "/etc/hide.me"
 LOG_FILE = os.path.join(CONFIG_DIR, "system_logs.json")
 THEME_FILE = os.path.join(CONFIG_DIR, "theme.conf")
@@ -116,14 +105,14 @@ DASH_FILE = os.path.join(CONFIG_DIR, "dashboard.json")
 FAV_FILE = os.path.join(CONFIG_DIR, "favorites.json")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
-# --- Server Database ---
+# Updated Coordinates based on actual physical Datacenter locations (IP info)
 SERVER_LIST = {
-    "free-de": {"name": "🇩🇪 Germany (Frankfurt)", "lat": 50.1109, "lon": 8.6821},
+    "free-de": {"name": "🇩🇪 Germany (Falkenstein/Frankfurt)", "lat": 50.4779, "lon": 12.3713},
     "free-fr": {"name": "🇫🇷 France (Paris)", "lat": 48.8566, "lon": 2.3522},
     "free-nl": {"name": "🇳🇱 Netherlands (Amsterdam)", "lat": 52.3676, "lon": 4.9041},
-    "free-ch": {"name": "🇨🇭 Switzerland (Zurich)", "lat": 47.3769, "lon": 8.5417},
-    "free-uk": {"name": "🇬🇧 United Kingdom (London)", "lat": 51.5074, "lon": -0.1278},
-    "free-us": {"name": "🇺🇸 United States (Los Angeles)", "lat": 34.0522, "lon": -118.2437}
+    "free-ch": {"name": "🇨🇭 Switzerland (Hünenberg/Zurich)", "lat": 47.1751, "lon": 8.4239},
+    "free-uk": {"name": "🇬🇧 United Kingdom (Reading/London)", "lat": 51.4543, "lon": -0.9781},
+    "free-us": {"name": "🇺🇸 United States (Kansas City)", "lat": 39.0997, "lon": -94.5786}
 }
 
 def get_local_subnet():
@@ -135,7 +124,18 @@ def get_local_subnet():
     except: pass
     return "192.168.178.0/24"
 
-# --- Threads ---
+def cleanup_zombie_network():
+    is_running = subprocess.run(['pgrep', '-x', 'hide.me'], stdout=subprocess.DEVNULL).returncode == 0
+    if not is_running:
+        try:
+            out = subprocess.check_output(["ip", "link", "show", "vpn"], stderr=subprocess.DEVNULL)
+            if b"vpn" in out:
+                subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL)
+        except: pass
+        try:
+            subprocess.run(["sudo", "hide.me", "disconnect"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except: pass
+
 class VpnMonitorThread(QThread):
     state_changed = pyqtSignal(bool)
     def run(self):
@@ -159,18 +159,14 @@ class TrafficThread(QThread):
                 with open('/proc/net/dev', 'r') as f:
                     lines = f.readlines()[2:]
                 
-                # Check if any VPN interface is actively generating stats
                 vpn_active = any(l.split()[0].strip(':').startswith(('tun', 'wg', 'vpn', 'hide')) for l in lines)
-                
                 for line in lines:
                     parts = line.split()
                     iface = parts[0].strip(':')
-                    
                     if vpn_active:
                         if not iface.startswith(('tun', 'wg', 'vpn', 'hide')): continue
                     else:
                         if not iface.startswith(('en', 'eth', 'wl', 'wlan')): continue
-                        
                     curr_rx += int(parts[1])
                     curr_tx += int(parts[9])
                     
@@ -184,13 +180,40 @@ class TrafficThread(QThread):
             time.sleep(1)
 
 class IpFetcherThread(QThread):
-    ip_fetched = pyqtSignal(str, str)
+    ip_fetched = pyqtSignal(str, str, str, str, bool) # Added param for 'lat,lon' string
+    def __init__(self, is_connected):
+        super().__init__()
+        self.is_connected = is_connected
+
     def run(self):
+        time.sleep(2)
+        
         try:
-            data = requests.get("https://ipinfo.io/json", timeout=5).json()
-            self.ip_fetched.emit(data.get('ip', 'Unknown'), f"{data.get('city', 'Unknown')}, {data.get('country', 'Unknown')}")
-        except:
-            self.ip_fetched.emit("Error", "Unknown")
+            r = requests.get("https://ipinfo.io/json", timeout=4)
+            if r.status_code == 200:
+                data = r.json()
+                self.ip_fetched.emit(data.get('ip', 'Unknown'), data.get('city', 'Unknown'), data.get('country', ''), data.get('loc', ''), self.is_connected)
+                return
+        except: pass
+        
+        try:
+            r = requests.get("http://ip-api.com/json/", timeout=4)
+            if r.status_code == 200:
+                data = r.json()
+                loc_str = f"{data.get('lat', '')},{data.get('lon', '')}"
+                self.ip_fetched.emit(data.get('query', 'Unknown'), data.get('city', 'Unknown'), data.get('countryCode', ''), loc_str, self.is_connected)
+                return
+        except: pass
+        
+        try:
+            r = requests.get("https://api.ipify.org?format=json", timeout=4)
+            if r.status_code == 200:
+                data = r.json()
+                self.ip_fetched.emit(data.get('ip', 'Unknown'), "Unknown", "", "", self.is_connected)
+                return
+        except: pass
+
+        self.ip_fetched.emit("Error", "Network/Blocked", "", "", self.is_connected)
 
 class PingThread(QThread):
     ping_result = pyqtSignal(str)
@@ -242,7 +265,6 @@ class CliAutoUpdateThread(QThread):
         except Exception as e:
             self.result.emit(f"CLI background update failed: {e}")
 
-# --- UI Layout Elements ---
 class CardWidget(QFrame):
     def __init__(self, title="", is_square=False):
         super().__init__()
@@ -267,18 +289,14 @@ class DashboardEditDialog(QDialog):
         self.setWindowTitle("Edit Dashboard Layout")
         self.setFixedSize(400, 550)
         self.layout_selections = []
-        
         options = ["Quick Connect", "My IP Address", "My Account", "Live Traffic Monitor", 
                    "Favourite Locations", "Startpage", "Mini Map", "Empty"]
-        
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
-        
         desc_lbl = QLabel("Select widgets for your dashboard grid\n(3 Top, 3 Bottom):")
         desc_lbl.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
         desc_lbl.setWordWrap(True)
         main_layout.addWidget(desc_lbl)
-        
         for i in range(6):
             cb = QComboBox()
             cb.addItems(options)
@@ -287,12 +305,10 @@ class DashboardEditDialog(QDialog):
             if i < len(current_layout) and current_layout[i] in options:
                 cb.setCurrentText(current_layout[i])
             self.layout_selections.append(cb)
-            
             lbl = QLabel(f"Slot {i+1}:")
             lbl.setStyleSheet("color: #64748B;")
             main_layout.addWidget(lbl)
             main_layout.addWidget(cb)
-            
         main_layout.addStretch()
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept)
@@ -309,9 +325,13 @@ class HideMeOfficialUI(QMainWindow):
         self.resize(1150, 750)
         
         self.is_connected = False
+        self._last_state = None
         self.current_connected_server = None
         self.conn_start_time = 0
         self.current_features_str = "-"
+        self.last_connected_combo_text = None
+        self.live_map_lat = None
+        self.live_map_lon = None
         
         os.makedirs(CONFIG_DIR, exist_ok=True)
         
@@ -324,6 +344,7 @@ class HideMeOfficialUI(QMainWindow):
         self.init_logger()
         self.log_debug("Application initializing...")
         
+        cleanup_zombie_network()
         self.check_and_install_cli()
         
         self.init_ui()
@@ -342,7 +363,7 @@ class HideMeOfficialUI(QMainWindow):
         self.traffic_thread.start()
         
         QTimer.singleShot(2000, self.run_auto_update_if_enabled)
-        self.fetch_ip()
+        self.fetch_ip(False)
 
     def init_logger(self):
         self.logger = logging.getLogger("hide_me_gui")
@@ -357,35 +378,17 @@ class HideMeOfficialUI(QMainWindow):
         else: self.logger.info(msg)
 
     def append_debug_log(self, msg):
-        if hasattr(self, 'txt_debug'):
-            self.txt_debug.append(msg)
+        if hasattr(self, 'txt_debug'): self.txt_debug.append(msg)
 
     def check_and_install_cli(self):
         try:
             if subprocess.run(['which', 'hide.me'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
-                self.log_debug("CLI missing. Starting auto-installer...", logging.WARNING)
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Icon.Information)
-                msg.setWindowTitle("Zero-Setup Auto-Installer")
-                msg.setText("The hide.me CLI is not installed.\nDownloading and installing automatically...")
-                msg.show()
-                QApplication.processEvents()
-                try:
-                    subprocess.run("curl -sL https://hide.me/install.sh | bash", shell=True, check=True)
-                    msg.setText("✅ hide.me CLI successfully installed!")
-                    self.log_debug("CLI auto-installed successfully.")
-                    QApplication.processEvents()
-                    time.sleep(1.5)
-                except Exception as e:
-                    self.log_debug(f"CLI auto-install failed: {e}", logging.ERROR)
-                    QMessageBox.critical(self, "Install Failed", f"Could not auto-install.\nPlease run manually: curl -sL https://hide.me/install.sh | sudo bash\n\nError: {e}")
-        except Exception as e: 
-            self.log_debug(f"Pre-check failed: {e}", logging.ERROR)
+                subprocess.run("curl -sL https://hide.me/install.sh | bash", shell=True, check=True)
+        except Exception as e: pass
 
     def run_auto_update_if_enabled(self):
         if hasattr(self, 'chk_autoupdate') and self.chk_autoupdate.isChecked():
             if hasattr(self, 'auto_upd_thread') and self.auto_upd_thread.isRunning(): return
-            self.log_debug("Running background CLI auto-update...")
             self.auto_upd_thread = CliAutoUpdateThread()
             self.auto_upd_thread.result.connect(self.log_debug)
             self.auto_upd_thread.start()
@@ -452,7 +455,6 @@ class HideMeOfficialUI(QMainWindow):
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except: pass
 
-    # --- Setup UI ---
     def init_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -475,11 +477,16 @@ class HideMeOfficialUI(QMainWindow):
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
         btn_bug.setToolTip("Report a bug on GitHub")
-        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
+        btn_bug.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
         main_layout.addWidget(top_bar)
+
+        self.status_banner = QLabel("⚠️ UNPROTECTED - VPN is NOT active! Your traffic is exposed.")
+        self.status_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_banner.setStyleSheet("background-color: #FF4C4C; color: white; font-weight: bold; font-size: 14px; padding: 6px;")
+        main_layout.addWidget(self.status_banner)
 
         body_layout = QHBoxLayout()
         body_layout.setSpacing(0)
@@ -504,7 +511,6 @@ class HideMeOfficialUI(QMainWindow):
         self.nav_btns["Debug Console"].setVisible(self.app_settings.get("debug_mode", False))
         
         sidebar_layout.addStretch()
-        
         lbl_acc = QLabel("Your Account\nFree Plan")
         lbl_acc.setStyleSheet("color: #8B9BB4; padding-left: 20px; font-weight: bold;")
         sidebar_layout.addWidget(lbl_acc)
@@ -603,7 +609,7 @@ class HideMeOfficialUI(QMainWindow):
             c = CardWidget("Startpage", is_square=True)
             c.layout.addWidget(QLabel("Privacy Search\nFollow us on Github"))
             btn_git = QPushButton("GitHub")
-            btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore"))
+            btn_git.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/tree/main"))
             c.layout.addWidget(btn_git)
             c.layout.addStretch()
             return c
@@ -689,9 +695,9 @@ class HideMeOfficialUI(QMainWindow):
         self.combo_loc.addItems(opts)
         self.combo_loc.setFixedHeight(40)
         
-        btn_ping = QPushButton("⚡ Test Ping")
+        # Removed the lightning bolt from the text here as requested!
+        btn_ping = QPushButton("Test Ping")
         btn_ping.setFixedHeight(40)
-        btn_ping.setToolTip("Check network latency (response time) to the selected server before connecting.")
         btn_ping.clicked.connect(self.run_ping)
         self.lbl_ping_res = QLabel("- ms")
         self.lbl_ping_res.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 14px;")
@@ -736,16 +742,24 @@ class HideMeOfficialUI(QMainWindow):
         center_lat, center_lon, zoom = 40, -10, 3
         
         for code, data in SERVER_LIST.items():
-            name = data['name'].split(" ")[1] 
+            name = data['name'].split(" ")[1] if " " in data['name'] else data['name']
             color = "green" if code == focus_code and self.is_connected else "#2BAEE0"
+            lat = data['lat']
+            lon = data['lon']
+            
+            # If we are connected to this server and we successfully fetched the real live IP coordinates, use them!
             if code == focus_code and self.is_connected:
-                center_lat, center_lon, zoom = data['lat'], data['lon'], 5
+                if self.live_map_lat and self.live_map_lon:
+                    lat = self.live_map_lat
+                    lon = self.live_map_lon
+                center_lat, center_lon, zoom = lat, lon, 5
+
             markers_js += f"""
-            var m = L.circleMarker([{data['lat']}, {data['lon']}], {{radius: 8, fillColor: '{color}', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);
+            var m = L.circleMarker([{lat}, {lon}], {{radius: 8, fillColor: '{color}', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);
             m.bindPopup("<b style='color:{color};'>{name}</b><br><br><a href='hideme://{code}' style='display:block; text-align:center; padding:5px; background:#2BAEE0; color:white; text-decoration:none; border-radius:4px;'>Connect</a>");
             """
 
-        html = f"""<!DOCTYPE html><html><head><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        html = f"""<!DOCTYPE html><html><head>//unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>body,html,#map{{height:100%;margin:0;padding:0;background-color:{bg_color};}} .leaflet-popup-content-wrapper{{background:{popup_bg};color:{popup_text};border:1px solid {border};}} .leaflet-popup-tip{{background:{popup_bg};border:1px solid {border};}}</style></head>
         <body><div id="map"></div><script>
         var map=L.map('map',{{zoomControl:true}}).setView([{center_lat}, {center_lon}], {zoom});
@@ -765,10 +779,13 @@ class HideMeOfficialUI(QMainWindow):
         
         if self.is_connected and self.current_connected_server in SERVER_LIST:
             d = SERVER_LIST[self.current_connected_server]
-            center_lat, center_lon, zoom = d['lat'], d['lon'], 3
-            markers_js = f"L.circleMarker([{d['lat']}, {d['lon']}], {{radius: 6, fillColor: 'green', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);"
+            lat = self.live_map_lat if self.live_map_lat else d['lat']
+            lon = self.live_map_lon if self.live_map_lon else d['lon']
+            
+            center_lat, center_lon, zoom = lat, lon, 3
+            markers_js = f"L.circleMarker([{lat}, {lon}], {{radius: 6, fillColor: 'green', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);"
 
-        html = f"""<!DOCTYPE html><html><head><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        html = f"""<!DOCTYPE html><html><head>//unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>body,html,#map{{height:100%;margin:0;padding:0;background-color:{bg_color};}}</style></head>
         <body><div id="map"></div><script>
         var map=L.map('map',{{zoomControl:false, dragging:false, scrollWheelZoom:false}}).setView([{center_lat}, {center_lon}], {zoom});
@@ -785,155 +802,79 @@ class HideMeOfficialUI(QMainWindow):
         
         tabs = QTabWidget()
         
-        # 1. Protocol Tab
         t_proto = QWidget(); l_proto = QVBoxLayout(t_proto)
-        self.r_auto = QRadioButton("Automatic (Recommended)")
-        self.r_auto.setToolTip("Let the client automatically decide whether to use IPv4 or IPv6 addressing.")
-        self.r_auto.setChecked(True)
-        
+        self.r_auto = QRadioButton("Automatic (Recommended)"); self.r_auto.setChecked(True)
         self.r_v4 = QRadioButton("IPv4 Only (-4)")
-        self.r_v4.setToolTip("Force connection over IPv4. Warning: IPv6 traffic will bypass the VPN completely!")
-        
         self.r_v6 = QRadioButton("IPv6 Only (-6)")
-        self.r_v6.setToolTip("Force connection over IPv6. Warning: IPv4 traffic will bypass the VPN completely!")
-        
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
         
-        # 2. Kill Switch Tab 
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
-        self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)")
-        self.chk_kill.setToolTip("If the VPN connection drops unexpectedly, all internet traffic will be blocked to prevent IP leaks.")
-        self.chk_kill.setChecked(True)
-        
-        self.chk_lan = QCheckBox("Allow local network connections (LAN access)")
-        self.chk_lan.setToolTip("Exclude your home network (e.g., printers, smart home devices) from the VPN tunnel so they remain accessible.")
-        self.chk_lan.setChecked(True)
-        
-        self.inp_lan = QLineEdit(get_local_subnet())
-        self.inp_lan.setPlaceholderText("e.g. 192.168.1.0/24")
-        self.inp_lan.setToolTip("Your local subnet. This is auto-detected, but you can override it if you have a custom network setup.")
-        self.inp_lan.setFixedWidth(180)
-        
-        h_lan = QHBoxLayout()
-        h_lan.addWidget(self.chk_lan)
-        h_lan.addWidget(self.inp_lan)
-        h_lan.addStretch()
-        
-        l_kill.addWidget(self.chk_kill)
-        l_kill.addLayout(h_lan)
-        
+        self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)"); self.chk_kill.setChecked(True)
+        self.chk_lan = QCheckBox("Allow local network connections (LAN access)"); self.chk_lan.setChecked(True)
+        self.inp_lan = QLineEdit(get_local_subnet()); self.inp_lan.setFixedWidth(180)
+        h_lan = QHBoxLayout(); h_lan.addWidget(self.chk_lan); h_lan.addWidget(self.inp_lan); h_lan.addStretch()
+        l_kill.addWidget(self.chk_kill); l_kill.addLayout(h_lan)
         l_kill.addWidget(QLabel("\nExecute custom script when triggered:", objectName="CardTitle"))
-        self.inp_script = QLineEdit("/path/to/script.sh")
-        self.inp_script.setToolTip("Path to a bash script that will automatically run if the Kill Switch triggers (e.g. to close specific apps).")
-        l_kill.addWidget(self.inp_script)
+        self.inp_script = QLineEdit("/path/to/script.sh"); l_kill.addWidget(self.inp_script)
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
         
-        # 3. Filters & Routing Tab
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
-        
         l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
         self.chk_split = QCheckBox("Exclude specific external IP addresses or subnets (-s)")
-        self.chk_split.setToolTip("Route specific internet traffic outside the secure VPN tunnel (useful for specific gaming servers or local streaming services).")
-        
-        self.inp_subnet = QLineEdit()
-        self.inp_subnet.setPlaceholderText("e.g. 8.8.8.8/32, 10.0.0.0/8")
-        self.inp_subnet.setToolTip("Enter specific IP ranges (CIDR notation) separated by commas.")
+        self.inp_subnet = QLineEdit(); self.inp_subnet.setPlaceholderText("e.g. 8.8.8.8/32, 10.0.0.0/8")
         l_filt.addWidget(self.chk_split); l_filt.addWidget(self.inp_subnet)
         
         l_filt.addWidget(QLabel("\nStealthGuard & Server Filters:", objectName="CardTitle"))
-        
         self.chk_pf = QCheckBox("Port Forwarding (-pf)")
-        self.chk_pf.setToolTip("Enable dynamic port forwarding (UPnP/NAT-PMP) through the VPN. Requires support on the selected server.")
-        
-        self.chk_track = QCheckBox("Block Trackers (-noTrackers)")
-        self.chk_track.setToolTip("SmartGuard: Blocks known tracking domains to enhance privacy.")
-        self.chk_track.setChecked(True)
-        
+        self.chk_track = QCheckBox("Block Trackers (-noTrackers)"); self.chk_track.setChecked(True)
         self.chk_ads = QCheckBox("Block Ads (-noAds)")
-        self.chk_ads.setToolTip("SmartGuard: Operates similarly to a browser-level ad-blocker but across your entire system connection.")
-        
         self.chk_malware = QCheckBox("Block Malware (-noMalware)")
-        self.chk_malware.setToolTip("SmartGuard: Blocks domains known for distributing malware or running botnets.")
-        
         self.chk_malicious = QCheckBox("Block Malicious Sites (--noMalicious)")
-        self.chk_malicious.setToolTip("SmartGuard: Filters out dangerous sites (phishing, scams) based on an extensive threat database.")
-        
         self.chk_illegal = QCheckBox("Block Illegal Content (--noIllegal)")
-        self.chk_illegal.setToolTip("SmartGuard: Coarse-level filtering of warez, spyware, and copyrighted material distribution sites.")
-        
         self.chk_safe = QCheckBox("Enforce SafeSearch (--safeSearch)")
-        self.chk_safe.setToolTip("SmartGuard: Forces SafeSearch mode automatically on supported search engines like Google and Bing.")
-        
         for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware, self.chk_malicious, self.chk_illegal, self.chk_safe]: 
             l_filt.addWidget(c)
-        
         l_filt.addStretch(); tabs.addTab(t_filt, "Routing & Filters")
 
-        # 4. Advanced Tab
         t_adv = QWidget(); l_adv = QVBoxLayout(t_adv)
-        
         self.chk_debug_mode = QCheckBox("Enable Debug Logging in Console")
-        self.chk_debug_mode.setToolTip("Shows a raw terminal output in the sidebar to monitor hide.me CLI background commands and errors in real-time.")
         self.chk_debug_mode.setChecked(self.app_settings.get("debug_mode", False))
         self.chk_debug_mode.stateChanged.connect(self.toggle_debug_mode)
-        
         self.chk_incognito = QCheckBox("Incognito Mode (Wipe connection logs on exit)")
-        self.chk_incognito.setToolTip("When enabled, all local logs, debug data, and connection history will be securely deleted when the application closes. Like a private tab for your VPN.")
         self.chk_incognito.setChecked(self.app_settings.get("incognito_mode", False))
         self.chk_incognito.stateChanged.connect(self.toggle_incognito)
-        
-        l_adv.addWidget(self.chk_debug_mode)
-        l_adv.addWidget(self.chk_incognito)
+        l_adv.addWidget(self.chk_debug_mode); l_adv.addWidget(self.chk_incognito)
         l_adv.addStretch(); tabs.addTab(t_adv, "Advanced")
 
-        # 5. Expert Tab
         t_exp = QWidget(); l_exp = QVBoxLayout(t_exp)
-        
         l_exp.addWidget(QLabel("DNS & Name Resolution:", objectName="CardTitle"))
-        
         self.chk_doh = QCheckBox("Disable DNS-over-HTTPS (--doh)")
-        self.chk_doh.setToolTip("The client prioritizes DNS-over-HTTPS for privacy. Check this to fall back to plain, unencrypted DNS requests.")
-        
         self.chk_force_dns = QCheckBox("Force DNS handling on VPN server (--forceDns)")
-        self.chk_force_dns.setToolTip("Forces all system DNS requests (UDP/TCP) to be strictly redirected to and resolved by the Hide.me VPN server.")
-        
-        self.inp_dns = QLineEdit()
-        self.inp_dns.setPlaceholderText("Custom DNS Servers (comma separated, e.g. 1.1.1.1:53)")
-        self.inp_dns.setToolTip("Override the default hide.me DNS servers. Useful if you want to use Cloudflare (1.1.1.1) or your own Pi-Hole over the VPN.")
-        
+        self.inp_dns = QLineEdit(); self.inp_dns.setPlaceholderText("Custom DNS Servers (comma separated, e.g. 1.1.1.1:53)")
         l_exp.addWidget(self.chk_doh); l_exp.addWidget(self.chk_force_dns); l_exp.addWidget(self.inp_dns)
         
         l_exp.addWidget(QLabel("\nWireGuard & Network Interfaces:", objectName="CardTitle"))
+        h_iface = QHBoxLayout(); h_iface.addWidget(QLabel("Interface Name (-i):")); self.inp_iface = QLineEdit(); self.inp_iface.setPlaceholderText("vpn"); h_iface.addWidget(self.inp_iface); l_exp.addLayout(h_iface)
+        h_port = QHBoxLayout(); h_port.addWidget(QLabel("Listen Port (-l):")); self.inp_port = QLineEdit(); self.inp_port.setPlaceholderText("Random"); h_port.addWidget(self.inp_port); l_exp.addLayout(h_port)
+        h_dpd = QHBoxLayout(); h_dpd.addWidget(QLabel("DPD Timeout (--dpd):")); self.inp_dpd = QLineEdit(); self.inp_dpd.setPlaceholderText("e.g. 1m0s"); h_dpd.addWidget(self.inp_dpd); l_exp.addLayout(h_dpd)
         
-        h_iface = QHBoxLayout()
-        h_iface.addWidget(QLabel("Interface Name (-i):"))
-        self.inp_iface = QLineEdit()
-        self.inp_iface.setPlaceholderText("vpn")
-        self.inp_iface.setToolTip("Define a custom name for the created virtual network adapter. Default is 'vpn'.")
-        h_iface.addWidget(self.inp_iface)
-        l_exp.addLayout(h_iface)
-        
-        h_port = QHBoxLayout()
-        h_port.addWidget(QLabel("Listen Port (-l):"))
-        self.inp_port = QLineEdit()
-        self.inp_port.setPlaceholderText("Random")
-        self.inp_port.setToolTip("Set a specific local port for encrypted WireGuard traffic. Usually left random to bypass local firewall restrictions.")
-        h_port.addWidget(self.inp_port)
-        l_exp.addLayout(h_port)
-        
-        h_dpd = QHBoxLayout()
-        h_dpd.addWidget(QLabel("DPD Timeout (--dpd):"))
-        self.inp_dpd = QLineEdit()
-        self.inp_dpd.setPlaceholderText("e.g. 1m0s")
-        self.inp_dpd.setToolTip("Dead Peer Detection Timeout. Controls how often the client checks if the VPN tunnel has stalled. Max is 1m0s.")
-        h_dpd.addWidget(self.inp_dpd)
-        l_exp.addLayout(h_dpd)
-        
+        l_exp.addWidget(QLabel("\nTroubleshooting:", objectName="CardTitle"))
+        btn_reset = QPushButton("⚠️ Emergency Network Reset (Fix Internet)")
+        btn_reset.setStyleSheet("background-color: #FF4C4C; color: white;")
+        btn_reset.clicked.connect(self.emergency_reset)
+        l_exp.addWidget(btn_reset)
         l_exp.addStretch(); tabs.addTab(t_exp, "Expert")
 
         layout.addWidget(tabs)
         self.stacked.addWidget(page)
+
+    def emergency_reset(self):
+        self.log_debug("Executing emergency network reset...")
+        self.disconnect_vpn()
+        try: subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL)
+        except: pass
+        QMessageBox.information(self, "Reset Complete", "Network interfaces and routes have been forcefully cleared.\nYour internet should work normally again.")
 
     def toggle_debug_mode(self):
         is_enabled = self.chk_debug_mode.isChecked()
@@ -966,22 +907,10 @@ class HideMeOfficialUI(QMainWindow):
         t_opts = QWidget(); l_opts = QVBoxLayout(t_opts)
         
         self.chk_autostart = QCheckBox("Launch hide.me on system startup")
-        self.chk_autostart.setToolTip("Automatically opens this GUI when you log into your operating system.")
-        
         self.chk_autoconnect = QCheckBox("Auto-connect VPN on app launch")
-        self.chk_autoconnect.setToolTip("Automatically establishes a VPN connection to the 'Best Location' when the application starts.")
-        
-        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup")
-        self.chk_autoupdate.setToolTip("Silently checks the GitHub repository for new backend hide.me CLI updates and installs them in the background.")
-        self.chk_autoupdate.setChecked(True)
-        
-        self.chk_notif = QCheckBox("Enable Native Desktop Notifications")
-        self.chk_notif.setToolTip("Shows system notifications (toast messages) when the VPN successfully connects or disconnects.")
-        self.chk_notif.setChecked(True)
-        
-        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)")
-        self.chk_tray.setToolTip("Keeps the app running in your system tray (bottom right corner) instead of closing it entirely when you hit the X button.")
-        self.chk_tray.setChecked(True)
+        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup"); self.chk_autoupdate.setChecked(True)
+        self.chk_notif = QCheckBox("Enable Native Desktop Notifications"); self.chk_notif.setChecked(True)
+        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)"); self.chk_tray.setChecked(True)
         self.chk_tray.stateChanged.connect(self.toggle_tray_visibility)
         
         l_opts.addWidget(QLabel("Automation Setup:", objectName="CardTitle"))
@@ -1006,7 +935,6 @@ class HideMeOfficialUI(QMainWindow):
         self.log_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         
         btn_clear = QPushButton("Clear / Delete Logs")
-        btn_clear.setToolTip("Wipes all connection history from your local settings file.")
         btn_clear.clicked.connect(self.clear_logs)
         btn_clear.setFixedWidth(150)
         
@@ -1020,22 +948,10 @@ class HideMeOfficialUI(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("Info & Updates", objectName="PageHeader"))
-        
         card = CardWidget(is_square=False)
         card.layout.addWidget(QLabel(f"hide.me VPN Manager GUI\nVersion: {__version__} | Date: {__date__}", objectName="PrimaryText"))
-        card.layout.addWidget(QLabel(f"This advanced interface was successfully created via {__ai_model__}.\nIt perfectly maps CLI capabilities to a modern desktop experience.", styleSheet="color: #2BAEE0; font-weight: bold; margin-top: 10px; margin-bottom: 20px;"))
-        
-        self.btn_update = QPushButton("🔄 Smart Updates: Check GitHub API")
-        self.btn_update.setFixedHeight(40)
-        self.btn_update.clicked.connect(self.run_update_check)
-        
-        btn_git = QPushButton("⭐ View GitHub Repository")
-        btn_git.setFixedHeight(40)
-        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager"))
-        
-        card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git)
-        card.layout.addStretch()
-        layout.addWidget(card)
+        self.btn_update = QPushButton("🔄 Smart Updates: Check GitHub API"); self.btn_update.setFixedHeight(40); self.btn_update.clicked.connect(self.run_update_check)
+        card.layout.addWidget(self.btn_update); card.layout.addStretch(); layout.addWidget(card)
         self.stacked.addWidget(page)
 
     def setup_debug(self):
@@ -1043,24 +959,14 @@ class HideMeOfficialUI(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("Debug Console", objectName="PageHeader"))
-        
         card = CardWidget(is_square=False)
-        self.txt_debug = QTextEdit()
-        self.txt_debug.setReadOnly(True)
-        self.txt_debug.setStyleSheet("font-family: monospace; font-size: 12px; background: black; color: #00FF00;")
-        
-        btn_clear = QPushButton("Clear Console")
-        btn_clear.clicked.connect(self.txt_debug.clear)
-        
-        card.layout.addWidget(self.txt_debug)
-        card.layout.addWidget(btn_clear)
-        layout.addWidget(card)
+        self.txt_debug = QTextEdit(); self.txt_debug.setReadOnly(True); self.txt_debug.setStyleSheet("font-family: monospace; font-size: 12px; background: black; color: #00FF00;")
+        btn_clear = QPushButton("Clear Console"); btn_clear.clicked.connect(self.txt_debug.clear)
+        card.layout.addWidget(self.txt_debug); card.layout.addWidget(btn_clear); layout.addWidget(card)
         self.stacked.addWidget(page)
 
     def run_update_check(self):
         if hasattr(self, 'upd_thread') and self.upd_thread.isRunning(): return
-        self.log_debug("Manual API update check initiated...")
-        self.btn_update.setText("Checking GitHub API...")
         self.upd_thread = UpdateCheckThread()
         self.upd_thread.update_result.connect(lambda res: [self.btn_update.setText(res), self.log_debug(res)])
         self.upd_thread.start()
@@ -1081,7 +987,6 @@ class HideMeOfficialUI(QMainWindow):
         self.log_entries = []
         self.save_logs()
         self.refresh_log_table()
-        self.log_debug("User logs cleared.")
 
     def apply_styles(self):
         is_dark = (self.current_theme == "dark")
@@ -1113,7 +1018,36 @@ class HideMeOfficialUI(QMainWindow):
             #ConnectBtn {{ background-color: {btn_bg}; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px; }}
             #ConnectBtn:hover {{ background-color: {btn_hover}; }}
             QLabel, QCheckBox, QRadioButton {{ color: {text_main}; font-size: 13px; }}
-            QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; }}
+            
+            /* --- SOLID COLOR CHECKBOX FIX (V44) --- */
+            QCheckBox::indicator {{
+                width: 16px; height: 16px;
+                background-color: white;
+                border: 2px solid {card_border};
+                border-radius: 4px;
+            }}
+            /* When checked, fill it with dark blue/black and add a white border inside */
+            QCheckBox::indicator:checked {{
+                background-color: #0F172A;
+                border: 3px solid white; 
+                outline: 1px solid {card_border};
+            }}
+            
+            QRadioButton::indicator {{
+                width: 16px; height: 16px;
+                background-color: white;
+                border: 2px solid {card_border};
+                border-radius: 9px;
+            }}
+            /* When checked, fill it with dark blue/black and add a white border inside */
+            QRadioButton::indicator:checked {{
+                background-color: #0F172A;
+                border: 4px solid white;
+                outline: 1px solid {card_border};
+            }}
+            /* -------------------------------------- */
+            
+            QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; font-weight: 500; }}
             QComboBox QAbstractItemView {{ background-color: {bg_main}; color: {text_main}; selection-background-color: {btn_bg}; }}
             QTabWidget::pane {{ border: 1px solid {card_border}; background: {card_bg}; }}
             QTabBar::tab {{ background: {bg_main}; color: {text_sub}; padding: 10px 20px; border: 1px solid {card_border}; }}
@@ -1172,32 +1106,18 @@ class HideMeOfficialUI(QMainWindow):
 
     def closeEvent(self, event):
         if self.is_connected:
-            reply = QMessageBox.question(self, '🛡️ VPN Active - Safe Close Guard',
-                "Your VPN connection is currently ACTIVE.\n\n"
-                "Do you want to minimize the app to the background to stay protected?\n\n"
-                "• 'Yes' = Minimize to Tray (Stay connected)\n"
-                "• 'No' = Disconnect VPN and Quit completely",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
-            
+            reply = QMessageBox.question(self, '🛡️ VPN Active', "Your VPN connection is currently ACTIVE.\n\nMinimize to tray?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Yes:
-                event.ignore()
-                self.hide()
+                event.ignore(); self.hide()
             elif reply == QMessageBox.StandardButton.No:
-                self.disconnect_vpn()
-                self.wipe_traces()
-                event.accept()
-                QApplication.instance().quit()
+                self.disconnect_vpn(); self.wipe_traces(); event.accept(); QApplication.instance().quit()
             else:
                 event.ignore()
         else:
             if hasattr(self, 'chk_tray') and self.chk_tray.isChecked():
-                event.ignore()
-                self.hide()
-                self.send_os_notification("hide.me VPN", "App minimized to system tray.")
+                event.ignore(); self.hide()
             else:
-                self.wipe_traces()
-                event.accept()
-                QApplication.instance().quit()
+                self.wipe_traces(); event.accept(); QApplication.instance().quit()
 
     def update_timer(self):
         elapsed = int(time.time() - self.conn_start_time)
@@ -1207,102 +1127,118 @@ class HideMeOfficialUI(QMainWindow):
 
     def run_ping(self):
         sel = self.combo_loc.currentText()
-        if sel == "🎲 Random Location":
-            self.lbl_ping_res.setText("N/A (Random)")
-            return
+        if sel == "🎲 Random Location": return
         elif sel == "⚡ Best Location":
-            if hasattr(self, 'ping_best_finder') and self.ping_best_finder.isRunning(): return
-            self.lbl_ping_res.setText("Searching best...")
-            self.ping_best_finder = BestLocationFinderThread()
-            self.ping_best_finder.best_found.connect(self._on_ping_best_found)
-            self.ping_best_finder.start()
+            self.ping_best_finder = BestLocationFinderThread(); self.ping_best_finder.best_found.connect(lambda c, p: self.lbl_ping_res.setText(f"{SERVER_LIST.get(c, {}).get('name', c)} ({int(p)} ms)")); self.ping_best_finder.start()
         else:
-            if hasattr(self, 'pinger') and self.pinger.isRunning(): return
             code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
-            self.lbl_ping_res.setText("Pinging...")
-            self.pinger = PingThread(code)
-            self.pinger.ping_result.connect(self.lbl_ping_res.setText)
-            self.pinger.start()
+            self.pinger = PingThread(code); self.pinger.ping_result.connect(self.lbl_ping_res.setText); self.pinger.start()
 
-    def _on_ping_best_found(self, code, ping):
-        name = SERVER_LIST.get(code, {}).get("name", code)
-        self.lbl_ping_res.setText(f"{name} ({int(ping)} ms)")
-
-    def fetch_ip(self):
-        if hasattr(self, 'ip_thread') and self.ip_thread.isRunning(): return
-        self.ip_thread = IpFetcherThread()
+    def fetch_ip(self, connected_state):
+        self.ip_thread = IpFetcherThread(connected_state)
         self.ip_thread.ip_fetched.connect(self.on_ip_fetched)
         self.ip_thread.start()
 
-    def on_ip_fetched(self, ip, loc):
-        if hasattr(self, 'lbl_ip'): self.lbl_ip.setText(f"IPv4\n{ip}\n\nLocation\n{loc}")
-        if self.is_connected: self.add_log_entry("Connected", ip, loc, self.current_features_str)
+    def on_ip_fetched(self, ip, city, country_code, loc_str_coords, was_connected):
+        flag = ""
+        if len(country_code) == 2 and country_code.isalpha():
+            flag = ''.join(chr(ord(c) + 127397) for c in country_code.upper()) + " "
+            
+        loc_str = f"{city}, {flag}{country_code}" if country_code else city
+        if hasattr(self, 'lbl_ip'): 
+            self.lbl_ip.setText(f"IPv4\n{ip}\n\nLocation\n{loc_str}")
+            
+        # Parse coordinates for live map update
+        if loc_str_coords and "," in loc_str_coords:
+            try:
+                lat, lon = loc_str_coords.split(",")
+                self.live_map_lat = float(lat)
+                self.live_map_lon = float(lon)
+            except: pass
+        else:
+            self.live_map_lat = None
+            self.live_map_lon = None
+            
+        if was_connected: 
+            self.add_log_entry("Connected", ip, loc_str, self.current_features_str)
+        else:
+            self.add_log_entry("Disconnected", ip, loc_str, "Unprotected")
+            
+        self.update_map_html(self.current_connected_server)
+        self.update_mini_map()
 
     def update_traffic(self, rx, tx):
-        if hasattr(self, 'lbl_rx'):
-            self.lbl_rx.setText(f"↓ {rx}"); self.lbl_tx.setText(f"↑ {tx}")
+        if hasattr(self, 'lbl_rx'): self.lbl_rx.setText(f"↓ {rx}"); self.lbl_tx.setText(f"↑ {tx}")
 
     def update_ui_state(self, connected):
+        if self._last_state == connected: return
+        self._last_state = connected
+        
         self.is_connected = connected
         if connected:
             self.conn_start_time = time.time(); self.timer.start(1000)
+            server_name = SERVER_LIST.get(self.current_connected_server, {}).get("name", self.current_connected_server)
+            self.status_banner.setText(f"🔒 PROTECTED - Connected to {server_name}")
+            self.status_banner.setStyleSheet("background-color: #8CA93A; color: white; font-weight: bold; font-size: 14px; padding: 6px;")
             if hasattr(self, 'btn_connect'):
                 self.btn_connect.setText("  🔒   00:00:00  ⚡")
                 self.btn_connect.setStyleSheet("background-color: #8CA93A; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px;")
             self.tray_icon.setIcon(self.create_icon("#8CA93A"))
             self.send_os_notification("hide.me VPN", "Protected! Connection established.")
-            self.update_map_html(self.current_connected_server)
-            self.update_mini_map()
         else:
             self.current_connected_server = None
+            self.live_map_lat = None
+            self.live_map_lon = None
             self.timer.stop()
+            self.status_banner.setText("⚠️ UNPROTECTED - VPN is NOT active! Your internet traffic is exposed.")
+            self.status_banner.setStyleSheet("background-color: #FF4C4C; color: white; font-weight: bold; font-size: 14px; padding: 6px;")
             if hasattr(self, 'btn_connect'):
                 self.btn_connect.setText("  ⏻   Enable VPN")
                 self.btn_connect.setStyleSheet("") 
             self.tray_icon.setIcon(self.create_icon("#8B9BB4"))
             self.send_os_notification("hide.me VPN", "Unprotected! VPN Disconnected.")
-            self.add_log_entry("Disconnected", "-", "-")
-            self.update_map_html(None)
-            self.update_mini_map()
-        self.fetch_ip()
+            
+        self.fetch_ip(connected)
 
     def disconnect_vpn(self):
-        try: subprocess.Popen(["sudo", "killall", "hide.me"])
+        try:
+            subprocess.run(["sudo", "hide.me", "disconnect"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["sudo", "killall", "hide.me"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except: pass
 
     def connect_vpn(self, server_code=None, source_combo=None):
         combo = source_combo if source_combo else (self.combo_loc if hasattr(self, 'combo_loc') else None)
         sel = combo.currentText() if combo else "⚡ Best Location"
         
-        if sel == "🎲 Random Location":
-            target_code = random.choice(list(SERVER_LIST.keys()))
-        elif sel == "⚡ Best Location":
-            target_code = "best"
-        else:
-            target_code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
+        if sel == "🎲 Random Location": target_code = random.choice(list(SERVER_LIST.keys()))
+        elif sel == "⚡ Best Location": target_code = "best"
+        else: target_code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
+
+        if server_code is not None: target_code = server_code
 
         if self.is_connected:
-            if target_code == self.current_connected_server or server_code is not None:
-                self.disconnect_vpn()
-                return
+            if server_code is None:
+                if sel == self.last_connected_combo_text:
+                    self.disconnect_vpn()
+                    return
             else:
-                self.log_debug(f"Seamlessly switching server to {target_code}...")
-                if hasattr(self, 'btn_connect'): self.btn_connect.setText("  🔄 Switching...")
-                self.disconnect_vpn()
-                
-                if target_code == "best":
-                    QTimer.singleShot(1500, self._start_best_finder)
-                else:
-                    QTimer.singleShot(1500, lambda: self._execute_vpn_connection(target_code))
-                return
+                if target_code == self.current_connected_server:
+                    self.disconnect_vpn()
+                    return
 
-        if target_code == "best":
-            self._start_best_finder()
-        else:
-            self._execute_vpn_connection(target_code)
+            if hasattr(self, 'btn_connect'): self.btn_connect.setText("  🔄 Switching...")
+            self.disconnect_vpn()
+            self.last_connected_combo_text = sel
+            if target_code == "best": QTimer.singleShot(1500, self._start_best_finder)
+            else: QTimer.singleShot(1500, lambda: self._execute_vpn_connection(target_code))
+            return
+
+        self.last_connected_combo_text = sel
+        if target_code == "best": self._start_best_finder()
+        else: self._execute_vpn_connection(target_code)
 
     def _start_best_finder(self):
-        if hasattr(self, 'best_finder') and self.best_finder.isRunning(): return
         if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Searching best...")
         self.best_finder = BestLocationFinderThread()
         self.best_finder.best_found.connect(lambda code, ping: self._execute_vpn_connection(code))
@@ -1310,9 +1246,7 @@ class HideMeOfficialUI(QMainWindow):
 
     def _execute_vpn_connection(self, server_code):
         self.current_connected_server = server_code
-        feats = []
-        split_targets = []
-        
+        feats = []; split_targets = []
         if hasattr(self, 'chk_kill') and self.chk_kill.isChecked(): feats.append("KS")
         if hasattr(self, 'chk_pf') and self.chk_pf.isChecked(): feats.append("PF")
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): feats.append("NoAds")
@@ -1325,18 +1259,12 @@ class HideMeOfficialUI(QMainWindow):
         
         if hasattr(self, 'chk_lan') and self.chk_lan.isChecked():
             lan_val = self.inp_lan.text().strip()
-            if lan_val:
-                feats.append("LAN-Bypass")
-                split_targets.append(lan_val)
-                
+            if lan_val: feats.append("LAN-Bypass"); split_targets.append(lan_val)
         if hasattr(self, 'chk_split') and self.chk_split.isChecked():
             custom_split = self.inp_subnet.text().strip()
-            if custom_split:
-                feats.append("Custom-Split")
-                split_targets.append(custom_split)
+            if custom_split: feats.append("Custom-Split"); split_targets.append(custom_split)
 
         self.current_features_str = ", ".join(feats) if feats else "None"
-        
         cmd = ["sudo", "hide.me"]
         if split_targets: cmd.extend(["-s", ",".join(split_targets)])
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
@@ -1357,18 +1285,12 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'inp_dpd') and self.inp_dpd.text().strip(): cmd.extend(["--dpd", self.inp_dpd.text().strip()])
         
         cmd.append("connect"); cmd.append(server_code)
-        
         try: 
             subprocess.Popen(cmd)
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Connecting...")
-        except Exception as e: 
-            QMessageBox.critical(self, "Error", f"Failed:\n{e}")
+        except Exception as e: pass
 
 if __name__ == '__main__':
-    # ======================================================================
-    # FIX FOR "Running as root without --no-sandbox is not supported" CRASH!
-    # This natively forces PyQt6 WebEngine to run in sandbox mode securely.
-    # ======================================================================
     if "--no-sandbox" not in sys.argv:
         sys.argv.append("--no-sandbox")
 
@@ -1378,13 +1300,23 @@ if __name__ == '__main__':
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle("Unsupported Operating System")
-        msg.setText("This interface is exclusively designed for Linux and the hide.me CLI.\n\n"
-                    "For Windows and macOS, please download the official native hide.me applications directly from their website.")
+        msg.setText("This interface is exclusively designed for Linux and the hide.me CLI.")
         msg.exec()
         sys.exit(1)
         
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
+    default_font = QApplication.font()
+    sys_family = default_font.family()
+    
+    families = [f for f in default_font.families() if f != "Noto Color Emoji"]
+    if sys_family not in families:
+        families.insert(0, sys_family)
+    families.append("Noto Color Emoji")
+    
+    default_font.setFamilies(families)
+    app.setFont(default_font)
     
     if hasattr(os, 'geteuid') and os.geteuid() != 0:
         msg = QMessageBox()
