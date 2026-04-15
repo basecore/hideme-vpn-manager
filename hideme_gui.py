@@ -455,7 +455,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
-        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
+        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
@@ -879,7 +879,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_git = QPushButton("⭐ View GitHub Repository")
         btn_git.setFixedHeight(40)
-        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager"))
+        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager"))
         
         card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git)
         card.layout.addStretch()
