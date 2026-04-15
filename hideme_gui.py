@@ -445,7 +445,11 @@ class HideMeOfficialUI(QMainWindow):
         return []
 
     def save_logs(self):
-        with open(LOG_FILE, "w") as f: json.dump(self.log_entries[-50:], f)
+        # Wenn die App gerade beendet wird, speichern abbrechen!
+        if getattr(self, 'is_shutting_down', False):
+            return
+        with open(LOG_FILE, "w") as f: 
+            json.dump(self.log_entries[-50:], f)
 
     def add_log_entry(self, state, ip, location, features="-"):
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -985,12 +989,18 @@ class HideMeOfficialUI(QMainWindow):
         self.save_app_settings()
 
     def wipe_traces(self):
+        # Signalisiert allen Hintergrundprozessen, das Speichern sofort einzustellen
+        self.is_shutting_down = True 
+        
         if self.app_settings.get("incognito_mode", False):
             self.log_entries = []
-            if hasattr(self, 'txt_debug'): self.txt_debug.clear()
+            if hasattr(self, 'txt_debug'): 
+                self.txt_debug.clear()
             if os.path.exists(LOG_FILE):
-                try: os.remove(LOG_FILE)
-                except: pass
+                try: 
+                    os.remove(LOG_FILE)
+                except: 
+                    pass
 
     def setup_system(self):
         page = QWidget()
