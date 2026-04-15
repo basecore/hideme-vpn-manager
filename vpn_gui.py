@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Accessibility & System Tray Edition
+# hide.me VPN Manager GUI - History Log & System Tray Edition
 # ==============================================================================
-__version__ = "14.0.0"
+__version__ = "15.0.0"
 __date__ = "April 15, 2026"
 __user__ = "Sebastian Rößer"
 
@@ -43,6 +43,7 @@ CONFIG_DIR = "/etc/hide.me"
 VERSION_FILE = os.path.join(CONFIG_DIR, ".gui_version")
 AUTO_UPDATE_FILE = os.path.join(CONFIG_DIR, ".auto_update")
 AUTO_CONNECT_FILE = os.path.join(CONFIG_DIR, ".auto_connect")
+HISTORY_FILE = os.path.join(CONFIG_DIR, "history.log")
 
 # --- User & Autostart Logic ---
 def get_real_user():
@@ -177,7 +178,7 @@ class HideMeVPNApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"hide.me VPN Pro - {__user__}")
-        self.root.geometry("480x880")
+        self.root.geometry("540x880")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.bg_main = "#10151E"
@@ -199,6 +200,7 @@ class HideMeVPNApp:
         self.ip_var = tk.StringVar(value="IP: Loading...")
         self.location_var = tk.StringVar(value="Location: -")
         self.last_state = None
+        self.last_logged_ip = None
         
         # Server Mapping
         self.server_mapping = {
@@ -246,35 +248,26 @@ class HideMeVPNApp:
         
         threading.Thread(target=self.monitor_daemon, daemon=True).start()
         
-        # Auto-Connect Logic
         if self.auto_connect_var.get() and not self.check_process():
             self.root.after(2000, self.connect_vpn)
 
-    # --- System Tray Logic (Accessibility Friendly) ---
+    # --- System Tray Logic ---
     def create_tray_icon(self, connected):
-        """Creates distinct shapes for colorblind users: Checkmark vs. Slash"""
         image = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-        
         if connected:
-            # Solid Cyan Circle
             draw.ellipse((4, 4, 60, 60), fill=self.brand_cyan)
-            # White Checkmark
             draw.line((18, 34, 28, 44), fill="white", width=6)
             draw.line((28, 44, 46, 20), fill="white", width=6)
         else:
-            # Hollow Grey Circle (like a prohibition sign)
             draw.ellipse((6, 6, 58, 58), outline=self.text_grey, width=6)
-            # Diagonal line across
             draw.line((16, 16, 48, 48), fill=self.text_grey, width=6)
-            
         return image
 
     def setup_tray(self):
         try:
             self.img_disconnected = self.create_tray_icon(connected=False)
             self.img_connected = self.create_tray_icon(connected=True)
-            
             menu = pystray.Menu(
                 pystray.MenuItem("Show / Hide Window", self.toggle_window_from_tray),
                 pystray.Menu.SEPARATOR,
@@ -283,7 +276,6 @@ class HideMeVPNApp:
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Quit App", self.force_quit)
             )
-            
             self.tray_icon = pystray.Icon("HideMeVPN", self.img_disconnected, "hide.me VPN: UNPROTECTED", menu=menu)
             threading.Thread(target=self.tray_icon.run, daemon=True).start()
         except Exception as e:
@@ -352,6 +344,11 @@ class HideMeVPNApp:
         self.style.map('Small.TButton', background=[('active', '#4a5568')])
         self.style.configure('Link.TButton', font=('Helvetica', 10, 'bold'), background="#1e293b", foreground=self.brand_cyan)
         self.style.map('Link.TButton', background=[('active', '#334155')])
+        
+        # Treeview (History Table) Styling
+        self.style.configure("Treeview", background=self.bg_card, foreground=self.text_white, fieldbackground=self.bg_card, borderwidth=0, font=('Helvetica', 9))
+        self.style.map('Treeview', background=[('selected', self.brand_cyan)], foreground=[('selected', 'black')])
+        self.style.configure("Treeview.Heading", background=self.bg_main, foreground=self.text_grey, font=('Helvetica', 9, 'bold'))
 
     def build_ui(self):
         # Header
@@ -423,7 +420,6 @@ class HideMeVPNApp:
         f3.pack(fill='x', padx=15, pady=5)
         ttk.Checkbutton(f3, text="Custom DNS (-d)", variable=self.use_custom_dns_var).pack(side='left')
         ttk.Entry(f3, textvariable=self.custom_dns_var, width=15).pack(side='right', fill='x', expand=True, padx=(10,0))
-        
         f5 = ttk.Frame(tab_adv, style='Card.TFrame')
         f5.pack(fill='x', padx=15, pady=(15, 5))
         c_auto = ttk.Checkbutton(f5, text="Launch on system startup", variable=self.auto_start_var, command=self.toggle_auto_start)
@@ -432,125 +428,19 @@ class HideMeVPNApp:
         f6.pack(fill='x', padx=15, pady=5)
         c_conn = ttk.Checkbutton(f6, text="Auto-connect on launch", variable=self.auto_connect_var, command=self.toggle_auto_connect)
         c_conn.pack(side='left')
-
-        # Tab 4: About
-        tab_about = ttk.Frame(notebook, style='Card.TFrame')
-        notebook.add(tab_about, text="About")
-        ttk.Label(tab_about, text="hideme-vpn-manager", font=('Helvetica', 14, 'bold'), style='Card.TLabel').pack(pady=(20, 5))
-        ttk.Label(tab_about, text="Powered by Python & Gemini 3.1 Pro Thinking", style='Card.TLabel', foreground=self.text_grey).pack(pady=(0, 20))
-        def open_repo(): webbrowser.open("https://github.com/basecore/hideme-vpn-manager/tree/main")
-        def open_issues(): webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues")
-        ttk.Button(tab_about, text="⭐ View GitHub Repository", style='Link.TButton', command=open_repo).pack(pady=5, padx=30, fill='x', ipady=5)
-        ttk.Button(tab_about, text="🐛 Report an Issue", style='Link.TButton', command=open_issues).pack(pady=5, padx=30, fill='x', ipady=5)
-
-        # Footer Buttons
-        btn_frame = ttk.Frame(self.root)
-        btn_frame.pack(fill='x', padx=20, pady=15)
-        ttk.Button(btn_frame, text="CONNECT", style='Connect.TButton', command=self.connect_vpn).pack(side='left', fill='x', expand=True, padx=(0, 5), ipady=12)
-        ttk.Button(btn_frame, text="DISCONNECT", style='Disconnect.TButton', command=self.disconnect_vpn).pack(side='right', fill='x', expand=True, padx=(5, 0), ipady=12)
-
-    def toggle_auto_start(self):
-        setup_autostart(self.auto_start_var.get())
         
-    def toggle_auto_connect(self):
-        save_auto_connect_pref(self.auto_connect_var.get())
-
-    def check_process(self):
-        try:
-            return subprocess.run(['pgrep', '-x', 'hide.me'], stdout=subprocess.DEVNULL).returncode == 0
-        except Exception:
-            return False
-
-    def monitor_daemon(self):
-        while True:
-            is_running = self.check_process()
-            if is_running != self.last_state:
-                self.last_state = is_running
-                if is_running:
-                    self.status_var.set("🛡️ PROTECTED")
-                    self.lbl_status.configure(foreground=self.color_success)
-                    self.fetch_ip_async(connected=True)
-                    if hasattr(self, 'tray_icon'):
-                        self.tray_icon.icon = self.img_connected
-                        self.tray_icon.title = "hide.me VPN: PROTECTED"
-                else:
-                    self.status_var.set("⚠️ UNPROTECTED")
-                    self.lbl_status.configure(foreground=self.color_danger)
-                    self.fetch_ip_async(connected=False)
-                    if hasattr(self, 'tray_icon'):
-                        self.tray_icon.icon = self.img_disconnected
-                        self.tray_icon.title = "hide.me VPN: UNPROTECTED"
-            time.sleep(2)
-
-    def fetch_ip_async(self, connected):
-        def task():
-            if connected:
-                time.sleep(4)
-            self.ip_var.set("Searching IP...")
-            self.location_var.set("Location: Loading...")
-            try:
-                resp = requests.get("https://ipinfo.io/json", timeout=5)
-                data = resp.json()
-                self.ip_var.set(f"Your IP: {data.get('ip', 'Unknown')}")
-                self.location_var.set(f"Location: {data.get('city', 'Unknown')}, {data.get('country', 'Unknown')}")
-            except Exception:
-                self.ip_var.set("IP: Could not be checked")
-                self.location_var.set("Location: Unknown")
-        threading.Thread(target=task, daemon=True).start()
-
-    def connect_vpn(self):
-        cmd = ["sudo", "hide.me"]
-        if self.split_var.get() and self.subnet_var.get().strip():
-            cmd.extend(["-s", self.subnet_var.get().strip()])
-        if self.protocol_var.get() == "IPv4":
-            cmd.append("-4")
-        elif self.protocol_var.get() == "IPv6":
-            cmd.append("-6")
-        if self.pf_var.get():
-            cmd.append("-pf")
-        if not self.killswitch_var.get():
-            cmd.append("-k=false")
-        if self.no_ads_var.get(): cmd.append("-noAds")
-        if self.no_malware_var.get(): cmd.append("-noMalware")
-        if self.no_trackers_var.get(): cmd.append("-noTrackers")
-        if self.safe_search_var.get(): cmd.append("-safeSearch")
-        if self.force_dns_var.get(): cmd.append("-forceDns")
-        if self.use_config_var.get() and self.config_path_var.get():
-            cmd.extend(["-c", self.config_path_var.get()])
-        if self.use_token_var.get() and self.token_path_var.get():
-            cmd.extend(["-t", self.token_path_var.get()])
-        if self.use_custom_dns_var.get() and self.custom_dns_var.get():
-            cmd.extend(["-d", self.custom_dns_var.get()])
-
-        cmd.append("connect")
-        srv_display = self.server_var.get().strip()
-        srv = self.server_mapping.get(srv_display, srv_display)
-        if srv == "Custom Server...":
-            messagebox.showwarning("Notice", "Please enter a valid server name in the dropdown menu.")
-            return
-        elif srv == "Random Free Server":
-            srv = random.choice(self.free_servers)
-        cmd.append(srv)
+        # Tab 4: History
+        tab_history = ttk.Frame(notebook, style='Card.TFrame')
+        notebook.add(tab_history, text="History")
+        tree_frame = ttk.Frame(tab_history)
+        tree_frame.pack(fill='both', expand=True, padx=15, pady=(15, 5))
+        cols = ("Time", "Status", "IP", "Location")
+        self.history_tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=8)
+        self.history_tree.heading("Time", text="Time")
+        self.history_tree.heading("Status", text="Status")
+        self.history_tree.heading("IP", text="IP")
+        self.history_tree.heading("Location", text="Location")
         
-        try:
-            subprocess.Popen(cmd)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to start VPN:\n{e}")
-
-    def disconnect_vpn(self):
-        subprocess.Popen(["sudo", "killall", "hide.me"])
-
-if __name__ == "__main__":
-    if not sys.platform.startswith('linux'):
-        print("Error: This tool is for Linux only.")
-        sys.exit(1)
-    
-    if os.geteuid() != 0:
-        print("Notice: This script requires Root/Sudo privileges.")
-        print("Please start it using: sudo python3 vpn_gui.py")
-        sys.exit(1)
+        self.history_tree.column("Time", width=120, anchor='center')
+        self.history_tree.column("Status", width=110, anchor='center')
         
-    root = tk.Tk()
-    root.deiconify()
-    app = HideMeVPNApp(root)
-    root.mainloop()
