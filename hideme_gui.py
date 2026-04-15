@@ -909,26 +909,47 @@ class HideMeOfficialUI(QMainWindow):
         self.save_app_settings()
 
     def toggle_auto_connect(self):
-    self.app_settings["auto_connect"] = self.chk_autoconnect.isChecked()
-    self.save_app_settings()
+        self.app_settings["auto_connect"] = self.chk_autoconnect.isChecked()
+        self.save_app_settings()
 
     def toggle_auto_start(self):
         import os
+        import shutil
+        import subprocess
+        
         is_enabled = self.chk_autostart.isChecked()
         self.app_settings["auto_start"] = is_enabled
         self.save_app_settings()
         
-        # Erstellt oder löscht den Linux-Autostart-Eintrag
-        autostart_dir = os.path.expanduser("~/.config/autostart")
+        # Den echten Benutzer herausfinden (auch wenn die GUI gerade mit sudo läuft)
+        user = os.environ.get("SUDO_USER") or os.environ.get("USER")
+        if not user or user == "root":
+            user = os.getlogin()
+
+        autostart_dir = os.path.expanduser(f"~{user}/.config/autostart")
         desktop_file = os.path.join(autostart_dir, "hidemegui.desktop")
+        sudoers_file = "/etc/sudoers.d/hidemegui_autostart"
+        script_path = os.path.abspath(__file__)
         
         if is_enabled:
+            # 1. Sudoers-Ausnahme erstellen (Passwortabfrage passiert hier nur 1x beim Einrichten)
+            sudoers_rule = f"{user} ALL=(ALL) NOPASSWD: /usr/bin/python3 {script_path}\n"
+            
+            try:
+                # Versucht direkt zu schreiben (falls die App ohnehin schon mit sudo gestartet wurde)
+                with open(sudoers_file, "w") as f:
+                    f.write(sudoers_rule)
+                os.chmod(sudoers_file, 0o440) # Sudoers-Dateien müssen zwingend diese Rechte haben
+            except PermissionError:
+                # Falls die App ohne sudo läuft, poppt einmalig das grafische Linux-Passwortfenster (pkexec) auf
+                subprocess.run(f'echo "{sudoers_rule}" | pkexec tee {sudoers_file}', shell=True)
+                subprocess.run(f'pkexec chmod 440 {sudoers_file}', shell=True)
+
+            # 2. Autostart-Datei für den Desktop erstellen (ohne Terminal)
             os.makedirs(autostart_dir, exist_ok=True)
-            script_path = os.path.abspath(__file__)
-            # Öffnet ein Terminal für die sudo-Passworteingabe beim Start
             desktop_content = f"""[Desktop Entry]
     Type=Application
-    Exec=x-terminal-emulator -e "sudo python3 {script_path}"
+    Exec=sudo /usr/bin/python3 {script_path}
     Hidden=false
     NoDisplay=false
     X-GNOME-Autostart-enabled=true
@@ -937,9 +958,23 @@ class HideMeOfficialUI(QMainWindow):
     """
             with open(desktop_file, "w") as f:
                 f.write(desktop_content)
+                
+            # Sicherstellen, dass die Datei dem regulären Benutzer gehört und nicht "root"
+            try:
+                shutil.chown(desktop_file, user=user)
+            except Exception:
+                pass
+                
         else:
+            # Alles wieder sauber entfernen, wenn der Nutzer den Haken in der App wegnimmt
             if os.path.exists(desktop_file):
                 os.remove(desktop_file)
+            
+            try:
+                if os.path.exists(sudoers_file):
+                    os.remove(sudoers_file)
+            except PermissionError:
+                subprocess.run(f'pkexec rm -f {sudoers_file}', shell=True)
 
     def toggle_auto_update(self):
         self.app_settings["auto_update"] = self.chk_autoupdate.isChecked()
@@ -974,7 +1009,7 @@ class HideMeOfficialUI(QMainWindow):
         self.chk_autoconnect.setChecked(self.app_settings.get("auto_connect", False))
         self.chk_autoconnect.stateChanged.connect(self.toggle_auto_connect)
         
-        self.chk_autautoupdate = QCheckBox("Auto-check and install CLI updates on startup")
+        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup")
         self.chk_autoupdate.setChecked(self.app_settings.get("auto_update", True))
         self.chk_autoupdate.stateChanged.connect(self.toggle_auto_update)
         
