@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v32)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v33)
 # ==============================================================================
-__version__ = "32.0.0"
+__version__ = "33.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -26,9 +26,10 @@ class QtLogger(logging.Handler):
         self.callback(msg)
 
 # --- Platform Specific Imports ---
-if sys.platform != "win32":
-    try: import pwd
-    except ImportError: pass
+try: 
+    import pwd
+except ImportError: 
+    pass
 
 # --- Auto-Install Python Modules ---
 def install_and_import():
@@ -38,6 +39,7 @@ def install_and_import():
         except ImportError:
             print(f"Installing {pkg}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+
 install_and_import()
 
 import requests
@@ -72,13 +74,13 @@ except ImportError:
     WEB_ENGINE_AVAILABLE = False
 
 # --- Configuration Paths ---
-CONFIG_DIR = "/etc/hide.me" if sys.platform != "win32" else os.path.join(os.path.expanduser("~"), ".hideme_gui")
+# OS verification happens before this path is used, so it's always Linux valid here.
+CONFIG_DIR = "/etc/hide.me"
 LOG_FILE = os.path.join(CONFIG_DIR, "system_logs.json")
 THEME_FILE = os.path.join(CONFIG_DIR, "theme.conf")
 DASH_FILE = os.path.join(CONFIG_DIR, "dashboard.json")
 FAV_FILE = os.path.join(CONFIG_DIR, "favorites.json")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
-os.makedirs(CONFIG_DIR, exist_ok=True)
 
 # --- Server Database ---
 SERVER_LIST = {
@@ -91,7 +93,6 @@ SERVER_LIST = {
 }
 
 def get_local_subnet():
-    if sys.platform == "win32": return "192.168.178.0/24"
     try:
         route_out = subprocess.check_output(["ip", "route"]).decode()
         default_iface = next((l.split()[l.split().index("dev")+1] for l in route_out.splitlines() if l.startswith("default") and "dev" in l), None)
@@ -106,7 +107,6 @@ class VpnMonitorThread(QThread):
     def run(self):
         last_state = None
         while True:
-            if sys.platform == "win32": time.sleep(2); continue
             try:
                 is_running = subprocess.run(['pgrep', '-x', 'hide.me'], stdout=subprocess.DEVNULL).returncode == 0
                 if is_running != last_state:
@@ -120,8 +120,6 @@ class TrafficThread(QThread):
     def run(self):
         last_rx, last_tx = 0, 0
         while True:
-            if sys.platform == "win32":
-                self.traffic_updated.emit("0.00 KB/s (Sim)", "0.00 KB/s (Sim)"); time.sleep(1); continue
             try:
                 curr_rx, curr_tx = 0, 0
                 with open('/proc/net/dev', 'r') as f:
@@ -140,18 +138,8 @@ class TrafficThread(QThread):
 
 class IpFetcherThread(QThread):
     ip_fetched = pyqtSignal(str, str)
-    def __init__(self, simulate_vpn=False):
-        super().__init__()
-        self.simulate_vpn = simulate_vpn
     def run(self):
         try:
-            if sys.platform == "win32":
-                time.sleep(1)
-                ip = "166.90.116.170" if self.simulate_vpn else "192.168.0.42"
-                loc = "Los Angeles, US (Simulated)" if self.simulate_vpn else "Local (Simulated)"
-                self.ip_fetched.emit(ip, loc)
-                return
-                
             data = requests.get("https://ipinfo.io/json", timeout=5).json()
             self.ip_fetched.emit(data.get('ip', 'Unknown'), f"{data.get('city', 'Unknown')}, {data.get('country', 'Unknown')}")
         except:
@@ -164,8 +152,6 @@ class PingThread(QThread):
         self.server = server
     def run(self):
         try:
-            if sys.platform == "win32":
-                time.sleep(0.5); self.ping_result.emit(f"{random.randint(15, 80)} ms (Simulated)"); return
             out = subprocess.check_output(["ping", "-c", "3", "-W", "1", f"{self.server}.hideservers.net"], stderr=subprocess.STDOUT).decode()
             match = re.search(r'min/avg/max/mdev = [\d\.]+/(.*?)/', out)
             if match:
@@ -177,14 +163,8 @@ class PingThread(QThread):
 class BestLocationFinderThread(QThread):
     best_found = pyqtSignal(str)
     def run(self):
-        if sys.platform == "win32":
-            time.sleep(1) 
-            self.best_found.emit("free-de")
-            return
-            
         best_server = "free-de"
         lowest_ping = float('inf')
-        
         for code in SERVER_LIST.keys():
             try:
                 out = subprocess.check_output(["ping", "-c", "1", "-W", "1", f"{code}.hideservers.net"], stderr=subprocess.STDOUT).decode()
@@ -195,7 +175,6 @@ class BestLocationFinderThread(QThread):
                         lowest_ping = ping_val
                         best_server = code
             except: pass
-            
         self.best_found.emit(best_server)
 
 class UpdateCheckThread(QThread):
@@ -210,7 +189,6 @@ class UpdateCheckThread(QThread):
 class CliAutoUpdateThread(QThread):
     result = pyqtSignal(str)
     def run(self):
-        if sys.platform == "win32": return
         try:
             subprocess.run("curl -sL https://hide.me/install.sh | bash", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.result.emit("CLI updated successfully in background.")
@@ -288,6 +266,8 @@ class HideMeOfficialUI(QMainWindow):
         self.conn_start_time = 0
         self.current_features_str = "-"
         
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        
         self.current_theme = self.load_theme()
         self.favorites = self.load_favorites()
         self.dash_layout_config = self.load_dash_config()
@@ -334,7 +314,6 @@ class HideMeOfficialUI(QMainWindow):
             self.txt_debug.append(msg)
 
     def check_and_install_cli(self):
-        if sys.platform == "win32": return
         try:
             if subprocess.run(['which', 'hide.me'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
                 self.log_debug("CLI missing. Starting auto-installer...", logging.WARNING)
@@ -418,7 +397,6 @@ class HideMeOfficialUI(QMainWindow):
 
     def send_os_notification(self, title, message):
         if not hasattr(self, 'chk_notif') or not self.chk_notif.isChecked(): return
-        if sys.platform == "win32": return
         try:
             user = os.environ.get('SUDO_USER', os.environ.get('USER', 'root'))
             uid = pwd.getpwnam(user).pw_uid
@@ -432,13 +410,6 @@ class HideMeOfficialUI(QMainWindow):
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
-        
-        # --- WINDOWS SIMULATION WARNING ---
-        if sys.platform == "win32":
-            warn_lbl = QLabel("⚠️ Windows 11 Simulation Mode Active: Network changes, Pings, and CLI commands are purely simulated.")
-            warn_lbl.setStyleSheet("background-color: #fbbf24; color: black; font-weight: bold; padding: 6px; font-size: 13px;")
-            warn_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            main_layout.addWidget(warn_lbl)
 
         # --- TOP BAR ---
         top_bar = QFrame()
@@ -1158,7 +1129,6 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'chk_tray') and self.chk_tray.isChecked(): self.tray_icon.show()
 
     def force_quit(self):
-        """Action for Quit via System Tray"""
         if self.is_connected:
             self.disconnect_vpn()
         self.wipe_traces()
@@ -1175,9 +1145,8 @@ class HideMeOfficialUI(QMainWindow):
         painter.drawEllipse(4, 4, 56, 56); painter.end()
         return QIcon(pixmap)
 
-    # --- Safe Close Guard (REWRITTEN & FOOLPROOF) ---
+    # --- Safe Close Guard ---
     def closeEvent(self, event):
-        # Wenn VPN aktiv ist: Warnung anzeigen!
         if self.is_connected:
             reply = QMessageBox.question(self, '🛡️ VPN Active - Safe Close Guard',
                 "Your VPN connection is currently ACTIVE.\n\n"
@@ -1187,19 +1156,15 @@ class HideMeOfficialUI(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
             
             if reply == QMessageBox.StandardButton.Yes:
-                # App läuft weiter im Hintergrund (Tray)
                 event.ignore()
                 self.hide()
             elif reply == QMessageBox.StandardButton.No:
-                # App stoppt VPN und beendet sich hart
                 self.disconnect_vpn()
                 self.wipe_traces()
                 event.accept()
                 QApplication.instance().quit()
             else:
-                # Abbruch, Fenster bleibt offen
                 event.ignore()
-        # Wenn VPN NICHT aktiv ist: Normales Verhalten
         else:
             if hasattr(self, 'chk_tray') and self.chk_tray.isChecked():
                 event.ignore()
@@ -1228,7 +1193,7 @@ class HideMeOfficialUI(QMainWindow):
         self.pinger.start()
 
     def fetch_ip(self):
-        self.ip_thread = IpFetcherThread(simulate_vpn=self.is_connected)
+        self.ip_thread = IpFetcherThread()
         self.ip_thread.ip_fetched.connect(self.on_ip_fetched)
         self.ip_thread.start()
 
@@ -1240,8 +1205,8 @@ class HideMeOfficialUI(QMainWindow):
 
     def update_traffic(self, rx, tx):
         if hasattr(self, 'lbl_rx'):
-            self.lbl_rx.setText(f"↓ {rx}" if self.is_connected else "↓ 0.00 KB/s")
-            self.lbl_tx.setText(f"↑ {tx}" if self.is_connected else "↑ 0.00 KB/s")
+            self.lbl_rx.setText(f"↓ {rx}")
+            self.lbl_tx.setText(f"↑ {tx}")
 
     def update_ui_state(self, connected):
         self.is_connected = connected
@@ -1270,7 +1235,6 @@ class HideMeOfficialUI(QMainWindow):
 
     def disconnect_vpn(self):
         self.log_debug("Triggering VPN disconnect...")
-        if sys.platform == "win32": self.update_ui_state(False); return
         try:
             subprocess.Popen(["sudo", "killall", "hide.me"])
         except Exception as e:
@@ -1304,7 +1268,6 @@ class HideMeOfficialUI(QMainWindow):
         self.log_debug(f"Executing connection command for {server_code}...")
         self.current_connected_server = server_code
         
-        # Build features string for logs and calculate split targets
         feats = []
         split_targets = []
         
@@ -1332,21 +1295,15 @@ class HideMeOfficialUI(QMainWindow):
 
         self.current_features_str = ", ".join(feats) if feats else "None"
         
-        if sys.platform == "win32": 
-            self.update_ui_state(True); return
-
         cmd = ["sudo", "hide.me"]
         
-        # Split Tunneling logic
         if split_targets:
             cmd.extend(["-s", ",".join(split_targets)])
             
-        # Basic Networking
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
         if hasattr(self, 'chk_kill') and not self.chk_kill.isChecked(): cmd.append("-k=false")
         
-        # Filters (SmartGuard)
         if hasattr(self, 'chk_pf') and self.chk_pf.isChecked(): cmd.append("-pf")
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): cmd.append("-noAds")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): cmd.append("-noMalware")
@@ -1355,7 +1312,6 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'chk_illegal') and self.chk_illegal.isChecked(): cmd.extend(["--noIllegal", "content,warez,spyware,copyright"])
         if hasattr(self, 'chk_safe') and self.chk_safe.isChecked(): cmd.append("--safeSearch")
         
-        # Expert / CLI specific flags
         if hasattr(self, 'chk_doh') and self.chk_doh.isChecked(): cmd.append("--doh")
         if hasattr(self, 'chk_force_dns') and self.chk_force_dns.isChecked(): cmd.append("--forceDns")
         if hasattr(self, 'inp_dns') and self.inp_dns.text().strip(): cmd.extend(["-d", self.inp_dns.text().strip()])
@@ -1374,14 +1330,30 @@ class HideMeOfficialUI(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed:\n{e}")
 
 if __name__ == '__main__':
-    if sys.platform != "win32":
-        if hasattr(os, 'geteuid') and os.geteuid() != 0:
-            print("Notice: hide.me CLI requires Root/Sudo privileges on Linux.")
-            print("Please restart using: sudo python3 hideme_gui.py")
-            sys.exit(1)
-        
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
+    # 1. OS Check: Block everything except Linux immediately
+    if not sys.platform.startswith("linux"):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Critical)
+        msg.setWindowTitle("Unsupported Operating System")
+        msg.setText("This interface is exclusively designed for Linux and the hide.me CLI.\n\n"
+                    "For Windows and macOS, please download the official native hide.me applications directly from their website.")
+        msg.exec()
+        sys.exit(1)
+        
+    # 2. Root Check: Required for WireGuard routing on Linux
+    if hasattr(os, 'geteuid') and os.geteuid() != 0:
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Root Privileges Required")
+        msg.setText("The hide.me CLI requires Root/Sudo privileges to configure WireGuard interfaces and routing tables securely.\n\n"
+                    "Please restart the application using the terminal:\n"
+                    "sudo python3 hideme_gui.py")
+        msg.exec()
+        sys.exit(1)
+        
     window = HideMeOfficialUI()
     window.show()
     sys.exit(app.exec())
