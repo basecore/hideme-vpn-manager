@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v48)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v50)
 # ==============================================================================
-__version__ = "48.0.0"
+__version__ = "50.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -94,7 +94,6 @@ DASH_FILE = os.path.join(CONFIG_DIR, "dashboard.json")
 FAV_FILE = os.path.join(CONFIG_DIR, "favorites.json")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
-# Cleaner Names for the Favorite Buttons & GUI
 SERVER_LIST = {
     "free-de": {"name": "🇩🇪 Frankfurt (DE)", "lat": 50.4779, "lon": 12.3713},
     "free-fr": {"name": "🇫🇷 Paris (FR)", "lat": 48.8566, "lon": 2.3522},
@@ -114,7 +113,6 @@ def get_local_subnet():
     return "192.168.178.0/24"
 
 def cleanup_zombie_network():
-    # DEEP CLEAN - Fixes the "file exists" routing errors when switching servers fast!
     try:
         subprocess.run(["sudo", "killall", "-9", "hide.me"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
@@ -1030,31 +1028,11 @@ class HideMeOfficialUI(QMainWindow):
             #PrimaryText {{ color: {text_main}; font-weight: bold; font-size: 14px; margin-bottom: 5px; }}
             #ConnectBtn {{ background-color: {btn_bg}; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px; }}
             #ConnectBtn:hover {{ background-color: {btn_hover}; }}
+            
+            /* Remove explicit indicator styling so standard system rendering takes over! */
             QLabel, QCheckBox, QRadioButton {{ color: {text_main}; font-size: 13px; }}
-            
-            /* Guaranteed Visible Dark Blue Checkmarks using Qt's internal native rendering fallback for images */
-            QCheckBox::indicator {{
-                width: 16px; height: 16px;
-                background-color: #FFFFFF;
-                border: 2px solid {card_border};
-                border-radius: 3px;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: #FFFFFF;
-                /* URL encoded completely black/dark-blue SVG Checkmark without transparency issues */
-                image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230F172A' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
-            }}
-            
-            QRadioButton::indicator {{
-                width: 16px; height: 16px;
-                background-color: #FFFFFF;
-                border: 2px solid {card_border};
-                border-radius: 8px;
-            }}
-            QRadioButton::indicator:checked {{
-                background-color: #FFFFFF;
-                /* URL encoded completely black/dark-blue SVG Circle */
-                image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'><circle cx='12' cy='12' r='7' fill='%230F172A'/></svg>");
+            QCheckBox::indicator, QRadioButton::indicator {{
+                /* Removing background/border styling lets Qt use its native checkmarks again */
             }}
             
             QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; font-weight: 500; }}
