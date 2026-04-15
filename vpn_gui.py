@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Edition (Flags, Warnings & About Tab)
+# hide.me VPN Manager GUI - Ultimate Edition (OS Guard, Flags, About Tab)
 # ==============================================================================
-__version__ = "10.0.0"
+__version__ = "11.0.0"
 __date__ = "April 15, 2026"
 __user__ = "Sebastian Rößer"
 
@@ -27,7 +27,9 @@ def install_and_import(package):
     finally:
         globals()[package] = __import__(package)
 
-install_and_import('requests')
+# Ensure 'requests' is available before we proceed
+if sys.platform.startswith('linux'):
+    install_and_import('requests')
 
 # --- Installation & Update Logic ---
 CONFIG_DIR = "/etc/hide.me"
@@ -468,6 +470,26 @@ class HideMeVPNApp:
         subprocess.Popen(["sudo", "killall", "hide.me"])
 
 if __name__ == "__main__":
+    
+    # --- 1. OS Compatibility Check ---
+    if not sys.platform.startswith('linux'):
+        # Try to show a nice GUI error on Windows/Mac, fallback to console print
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror(
+                "Unsupported Operating System", 
+                "This hide.me VPN Manager is built exclusively for Linux.\n\n"
+                "It relies on the Linux-specific hide.me CLI and native networking commands (like 'ip route'). "
+                "It cannot run on Windows or macOS."
+            )
+            root.destroy()
+        except:
+            print("Error: This hide.me VPN Manager is designed exclusively for Linux.")
+            print("It cannot run on Windows or macOS.")
+        sys.exit(1)
+    
+    # --- 2. Root Privilege Check (Only runs on Linux) ---
     if os.geteuid() != 0:
         print("Notice: This script requires Root/Sudo privileges.")
         print("Please start it using: sudo python3 vpn_gui.py")
