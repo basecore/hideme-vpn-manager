@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v36)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v37)
 # ==============================================================================
-__version__ = "36.0.0"
+__version__ = "37.0.0"
 __date__ = "April 15, 2026"
-__ai_model__ = "Gemini 3.1 Pro"
+__ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
 import os
 import sys
@@ -16,6 +16,9 @@ import webbrowser
 import traceback
 import logging
 import shutil
+
+# --- Fix for QtWebEngine running as root (sudo) ---
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
 
 # --- Custom Logger for Debug Console ---
 class QtLogger(logging.Handler):
@@ -43,17 +46,17 @@ def auto_install_dependencies():
 
     if missing:
         print("\n" + "="*70)
-        print(" 🔄 LADE FEHLENDE PAKETE HERUNTER (AUTO-INSTALLING) 🔄")
+        print(" 🔄 DOWNLOADING MISSING PACKAGES (AUTO-INSTALLING) 🔄")
         print("="*70)
         
         # Check if the system uses 'apt' (Debian/Ubuntu/Mint)
         if shutil.which("apt"):
             packages = ["python3-pyqt6", "python3-pyqt6.qtwebengine", "python3-requests"]
-            print("Linux Mint / Ubuntu erkannt.")
-            print("Für maximale Transparenz - folgende offizielle System-Pakete werden jetzt installiert:")
+            print("Ubuntu / Linux Mint detected.")
+            print("For maximum transparency - the following official system packages will now be installed:")
             for pkg in packages:
                 print(f"  -> {pkg}")
-            print("\nStarte 'apt-get install' im Hintergrund...\n")
+            print("\nStarting 'apt-get install' in the background...\n")
             
             try:
                 # Update package list silently
@@ -62,20 +65,20 @@ def auto_install_dependencies():
                 # Install packages automatically (the -y flag says 'yes' to prompts)
                 subprocess.run(["apt-get", "install", "-y"] + packages, check=True)
                 
-                print("\n✅ Installation erfolgreich! Starte App nahtlos neu...\n")
+                print("\n✅ Installation successful! Restarting application seamlessly...\n")
                 print("="*70)
                 
                 # Instantly restart the script to load the new modules
                 os.execv(sys.executable, [sys.executable] + sys.argv)
                 
             except subprocess.CalledProcessError as e:
-                print(f"\n❌ Fehler bei der automatischen Installation: {e}")
-                print("Bitte versuche es manuell in deinem Terminal:")
+                print(f"\n❌ Error during automatic installation: {e}")
+                print("Please try manually in your terminal:")
                 print(f"sudo apt update && sudo apt install -y {' '.join(packages)}")
                 sys.exit(1)
         else:
-            print("Dein Paketmanager wird für den Auto-Installer nicht unterstützt.")
-            print("Bitte installiere 'PyQt6', 'PyQt6-WebEngine' und 'requests' manuell über deinen Paketmanager.")
+            print("Your package manager is not supported for the auto-installer.")
+            print("Please install 'PyQt6', 'PyQt6-WebEngine' and 'requests' manually via your package manager.")
             sys.exit(1)
 
 # Run the auto-installer before anything else
