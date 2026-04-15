@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v28)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v29)
 # ==============================================================================
-__version__ = "28.0.0"
+__version__ = "29.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -455,7 +455,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
-        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues"))
+        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
@@ -527,7 +527,6 @@ class HideMeOfficialUI(QMainWindow):
             self.dash_grid.addWidget(widget, row, col)
 
     def create_widget_by_name(self, name):
-        # We explicitly set is_square=True to force exactly 270x270 px squares
         if name == "Quick Connect":
             c = CardWidget("Quick connect", is_square=True)
             self.dash_combo_loc = QComboBox()
@@ -649,7 +648,6 @@ class HideMeOfficialUI(QMainWindow):
         header_layout.addWidget(btn_edit)
         layout.addLayout(header_layout)
 
-        # Center the grid dynamically so squares stay perfect regardless of window scaling
         grid_container = QWidget()
         self.dash_grid = QGridLayout(grid_container)
         self.dash_grid.setSpacing(15)
@@ -776,7 +774,7 @@ class HideMeOfficialUI(QMainWindow):
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
         
-        # 2. Kill Switch Tab (LAN access + Editable Subnet)
+        # 2. Kill Switch Tab
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
         self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)")
         self.chk_kill.setChecked(True)
@@ -799,7 +797,7 @@ class HideMeOfficialUI(QMainWindow):
         l_kill.addWidget(QLineEdit("/path/to/script.sh"))
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
         
-        # 3. Filters & Routing Tab
+        # 3. Filters & Routing Tab (Expanded SmartGuard Options)
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
         
         l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
@@ -813,7 +811,14 @@ class HideMeOfficialUI(QMainWindow):
         self.chk_track = QCheckBox("Block Trackers (-noTrackers)"); self.chk_track.setChecked(True)
         self.chk_ads = QCheckBox("Block Ads (-noAds)")
         self.chk_malware = QCheckBox("Block Malware (-noMalware)")
-        for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware]: l_filt.addWidget(c)
+        
+        # Added new filter options
+        self.chk_malicious = QCheckBox("Block Malicious Sites (--noMalicious)")
+        self.chk_illegal = QCheckBox("Block Illegal Content (--noIllegal)")
+        self.chk_safe = QCheckBox("Enforce SafeSearch (--safeSearch)")
+        
+        for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware, self.chk_malicious, self.chk_illegal, self.chk_safe]: 
+            l_filt.addWidget(c)
         
         l_filt.addStretch(); tabs.addTab(t_filt, "Routing & Filters")
 
@@ -824,6 +829,41 @@ class HideMeOfficialUI(QMainWindow):
         self.chk_debug_mode.stateChanged.connect(self.toggle_debug_mode)
         l_adv.addWidget(self.chk_debug_mode)
         l_adv.addStretch(); tabs.addTab(t_adv, "Advanced")
+
+        # 5. Expert Tab (For advanced CLI flags)
+        t_exp = QWidget(); l_exp = QVBoxLayout(t_exp)
+        
+        l_exp.addWidget(QLabel("DNS & Name Resolution:", objectName="CardTitle"))
+        self.chk_doh = QCheckBox("Disable DNS-over-HTTPS (--doh)")
+        self.chk_force_dns = QCheckBox("Force DNS handling on VPN server (--forceDns)")
+        self.inp_dns = QLineEdit()
+        self.inp_dns.setPlaceholderText("Custom DNS Servers (comma separated, e.g. 1.1.1.1:53)")
+        l_exp.addWidget(self.chk_doh); l_exp.addWidget(self.chk_force_dns); l_exp.addWidget(self.inp_dns)
+        
+        l_exp.addWidget(QLabel("\nWireGuard & Network Interfaces:", objectName="CardTitle"))
+        
+        h_iface = QHBoxLayout()
+        h_iface.addWidget(QLabel("Interface Name (-i):"))
+        self.inp_iface = QLineEdit()
+        self.inp_iface.setPlaceholderText("vpn")
+        h_iface.addWidget(self.inp_iface)
+        l_exp.addLayout(h_iface)
+        
+        h_port = QHBoxLayout()
+        h_port.addWidget(QLabel("Listen Port (-l):"))
+        self.inp_port = QLineEdit()
+        self.inp_port.setPlaceholderText("Random")
+        h_port.addWidget(self.inp_port)
+        l_exp.addLayout(h_port)
+        
+        h_dpd = QHBoxLayout()
+        h_dpd.addWidget(QLabel("DPD Timeout (--dpd):"))
+        self.inp_dpd = QLineEdit()
+        self.inp_dpd.setPlaceholderText("e.g. 1m0s")
+        h_dpd.addWidget(self.inp_dpd)
+        l_exp.addLayout(h_dpd)
+        
+        l_exp.addStretch(); tabs.addTab(t_exp, "Expert")
 
         layout.addWidget(tabs)
         self.stacked.addWidget(page)
@@ -898,7 +938,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_git = QPushButton("⭐ View GitHub Repository")
         btn_git.setFixedHeight(40)
-        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager"))
+        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager"))
         
         card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git)
         card.layout.addStretch()
@@ -1168,8 +1208,11 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): feats.append("NoAds")
         if hasattr(self, 'chk_track') and self.chk_track.isChecked(): feats.append("NoTrack")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): feats.append("NoMalware")
+        if hasattr(self, 'chk_malicious') and self.chk_malicious.isChecked(): feats.append("NoMalicious")
+        if hasattr(self, 'chk_illegal') and self.chk_illegal.isChecked(): feats.append("NoIllegal")
+        if hasattr(self, 'chk_safe') and self.chk_safe.isChecked(): feats.append("SafeSearch")
+        if hasattr(self, 'chk_force_dns') and self.chk_force_dns.isChecked(): feats.append("ForceDNS")
         
-        # Read from the new editable LAN text field
         if hasattr(self, 'chk_lan') and self.chk_lan.isChecked():
             lan_val = self.inp_lan.text().strip()
             if lan_val:
@@ -1189,17 +1232,31 @@ class HideMeOfficialUI(QMainWindow):
 
         cmd = ["sudo", "hide.me"]
         
-        # Combine all custom networks and local networks into the split parameter
+        # Split Tunneling logic
         if split_targets:
             cmd.extend(["-s", ",".join(split_targets)])
             
+        # Basic Networking
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
         if hasattr(self, 'chk_kill') and not self.chk_kill.isChecked(): cmd.append("-k=false")
+        
+        # Filters (SmartGuard)
         if hasattr(self, 'chk_pf') and self.chk_pf.isChecked(): cmd.append("-pf")
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): cmd.append("-noAds")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): cmd.append("-noMalware")
         if hasattr(self, 'chk_track') and self.chk_track.isChecked(): cmd.append("-noTrackers")
+        if hasattr(self, 'chk_malicious') and self.chk_malicious.isChecked(): cmd.append("--noMalicious")
+        if hasattr(self, 'chk_illegal') and self.chk_illegal.isChecked(): cmd.extend(["--noIllegal", "content,warez,spyware,copyright"])
+        if hasattr(self, 'chk_safe') and self.chk_safe.isChecked(): cmd.append("--safeSearch")
+        
+        # Expert / CLI specific flags
+        if hasattr(self, 'chk_doh') and self.chk_doh.isChecked(): cmd.append("--doh")
+        if hasattr(self, 'chk_force_dns') and self.chk_force_dns.isChecked(): cmd.append("--forceDns")
+        if hasattr(self, 'inp_dns') and self.inp_dns.text().strip(): cmd.extend(["-d", self.inp_dns.text().strip()])
+        if hasattr(self, 'inp_iface') and self.inp_iface.text().strip(): cmd.extend(["-i", self.inp_iface.text().strip()])
+        if hasattr(self, 'inp_port') and self.inp_port.text().strip(): cmd.extend(["-l", self.inp_port.text().strip()])
+        if hasattr(self, 'inp_dpd') and self.inp_dpd.text().strip(): cmd.extend(["--dpd", self.inp_dpd.text().strip()])
         
         cmd.append("connect"); cmd.append(server_code)
         
