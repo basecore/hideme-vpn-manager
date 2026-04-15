@@ -411,6 +411,18 @@ class HideMeOfficialUI(QMainWindow):
     def save_app_settings(self):
         with open(SETTINGS_FILE, "w") as f: json.dump(self.app_settings, f)
 
+    def save_selected_location(self, text):
+        # Speichert den Standort dauerhaft in den Settings
+        self.app_settings["selected_location"] = text
+        self.save_app_settings()
+        
+        # Hält beide Auswahlboxen im Programm live synchron (ohne Endlosschleife)
+        if hasattr(self, 'dash_combo_loc') and self.dash_combo_loc.currentText() != text:
+            self.dash_combo_loc.setCurrentText(text)
+        if hasattr(self, 'combo_loc') and self.combo_loc.currentText() != text:
+            self.combo_loc.setCurrentText(text)
+
+
     def load_theme(self):
         if os.path.exists(THEME_FILE):
             with open(THEME_FILE, "r") as f: return f.read().strip()
@@ -567,6 +579,10 @@ class HideMeOfficialUI(QMainWindow):
             opts = ["⚡ Best Location", "🎲 Random Location"] + [v["name"] for v in SERVER_LIST.values()]
             self.dash_combo_loc.addItems(opts)
             self.dash_combo_loc.setFixedHeight(35)
+            saved_loc = self.app_settings.get("selected_location", "⚡ Best Location")
+            if saved_loc in opts:
+                self.dash_combo_loc.setCurrentText(saved_loc)
+            self.dash_combo_loc.currentTextChanged.connect(self.save_selected_location)
             self.btn_connect = QPushButton("  ⏻   Enable VPN")
             self.btn_connect.setObjectName("ConnectBtn")
             self.btn_connect.setFixedHeight(50)
@@ -707,7 +723,10 @@ class HideMeOfficialUI(QMainWindow):
         opts = ["⚡ Best Location", "🎲 Random Location"] + [v["name"] for v in SERVER_LIST.values()]
         self.combo_loc.addItems(opts)
         self.combo_loc.setFixedHeight(40)
-        
+        saved_loc = self.app_settings.get("selected_location", "⚡ Best Location")
+        if saved_loc in opts:
+            self.combo_loc.setCurrentText(saved_loc)
+        self.combo_loc.currentTextChanged.connect(self.save_selected_location)       
         btn_ping = QPushButton("Test Ping")
         btn_ping.setFixedHeight(40)
         btn_ping.clicked.connect(self.run_ping)
@@ -1241,13 +1260,29 @@ class HideMeOfficialUI(QMainWindow):
             self.pinger = PingThread(code); self.pinger.ping_result.connect(self.lbl_ping_res.setText); self.pinger.start()
 
     def fetch_ip(self, connected_state):
-        self.ip_thread = IpFetcherThread(connected_state)
-        self.ip_thread.ip_fetched.connect(self.on_ip_fetched)
-        self.ip_thread.start()
+        # Sammelt alle laufenden Threads in einer Liste, damit sie nicht gelöscht werden
+        if not hasattr(self, '_active_ip_threads'): 
+            self._active_ip_threads = []
+        
+        # Räumt fertige Threads aus der Liste auf
+        self._active_ip_threads = [t for t in self._active_ip_threads if t.isRunning()]
+        
+        # Startet den neuen Thread sicher
+        t = IpFetcherThread(connected_state)
+        t.ip_fetched.connect(self.on_ip_fetched)
+        self._active_ip_threads.append(t)
+        t.start()
+
 
     def on_ip_fetched(self, ip, city, country_code, loc_str_coords, was_connected):
+        # Verhindert, dass alte Hintergrundabfragen falsche Logs generieren
+        if was_connected != self.is_connected:
+            return
+
         flag = ""
         if len(country_code) == 2 and country_code.isalpha():
+        # ... der restliche Code bleibt unverändert
+
             flag = ''.join(chr(ord(c) + 127397) for c in country_code.upper()) + " "
             
         loc_str = f"{city}, {flag}{country_code}" if country_code else city
