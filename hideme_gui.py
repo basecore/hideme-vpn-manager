@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v27)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v28)
 # ==============================================================================
-__version__ = "27.0.0"
+__version__ = "28.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -455,7 +455,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
-        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
+        btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
@@ -776,17 +776,30 @@ class HideMeOfficialUI(QMainWindow):
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
         
-        # 2. Kill Switch Tab (Now focuses on LAN logic properly)
+        # 2. Kill Switch Tab (LAN access + Editable Subnet)
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
-        self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)"); self.chk_kill.setChecked(True)
+        self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)")
+        self.chk_kill.setChecked(True)
+        
         self.chk_lan = QCheckBox("Allow local network connections (LAN access)")
-        self.chk_lan.setChecked(True) # Usually a desired default
-        l_kill.addWidget(self.chk_kill); l_kill.addWidget(self.chk_lan)
+        self.chk_lan.setChecked(True)
+        self.inp_lan = QLineEdit(get_local_subnet())
+        self.inp_lan.setPlaceholderText("e.g. 192.168.1.0/24")
+        self.inp_lan.setFixedWidth(180)
+        
+        h_lan = QHBoxLayout()
+        h_lan.addWidget(self.chk_lan)
+        h_lan.addWidget(self.inp_lan)
+        h_lan.addStretch()
+        
+        l_kill.addWidget(self.chk_kill)
+        l_kill.addLayout(h_lan)
+        
         l_kill.addWidget(QLabel("\nExecute custom script when triggered:", objectName="CardTitle"))
         l_kill.addWidget(QLineEdit("/path/to/script.sh"))
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
         
-        # 3. Filters & Routing Tab (Split Tunneling conceptually separated)
+        # 3. Filters & Routing Tab
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
         
         l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
@@ -855,7 +868,7 @@ class HideMeOfficialUI(QMainWindow):
         layout.addWidget(QLabel("Logs & Messages", objectName="PageHeader"))
         
         card = CardWidget(is_square=False)
-        self.log_table = QTableWidget(0, 5) # Increased to 5 for Features
+        self.log_table = QTableWidget(0, 5) 
         self.log_table.setHorizontalHeaderLabels(["Timestamp", "VPN State", "IP Address", "Location", "Features"])
         self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.log_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -885,7 +898,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_git = QPushButton("⭐ View GitHub Repository")
         btn_git.setFixedHeight(40)
-        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager"))
+        btn_git.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme-vpn-manager"))
         
         card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git)
         card.layout.addStretch()
@@ -1146,22 +1159,22 @@ class HideMeOfficialUI(QMainWindow):
         self.log_debug(f"Executing connection command for {server_code}...")
         self.current_connected_server = server_code
         
-        # Build features string for logs
+        # Build features string for logs and calculate split targets
         feats = []
+        split_targets = []
+        
         if hasattr(self, 'chk_kill') and self.chk_kill.isChecked(): feats.append("KS")
         if hasattr(self, 'chk_pf') and self.chk_pf.isChecked(): feats.append("PF")
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): feats.append("NoAds")
         if hasattr(self, 'chk_track') and self.chk_track.isChecked(): feats.append("NoTrack")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): feats.append("NoMalware")
         
-        split_targets = []
+        # Read from the new editable LAN text field
         if hasattr(self, 'chk_lan') and self.chk_lan.isChecked():
-            feats.append("LAN-Bypass")
-            local_sub = get_local_subnet()
-            if sys.platform == "win32":
-                split_targets.append("192.168.178.0/24")
-            elif local_sub:
-                split_targets.append(local_sub)
+            lan_val = self.inp_lan.text().strip()
+            if lan_val:
+                feats.append("LAN-Bypass")
+                split_targets.append(lan_val)
                 
         if hasattr(self, 'chk_split') and self.chk_split.isChecked():
             custom_split = self.inp_subnet.text().strip()
@@ -1176,7 +1189,7 @@ class HideMeOfficialUI(QMainWindow):
 
         cmd = ["sudo", "hide.me"]
         
-        # Add the split targets appropriately using standard comma separation
+        # Combine all custom networks and local networks into the split parameter
         if split_targets:
             cmd.extend(["-s", ",".join(split_targets)])
             
