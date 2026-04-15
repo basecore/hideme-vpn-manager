@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v34)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v36)
 # ==============================================================================
-__version__ = "34.0.0"
+__version__ = "36.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -15,6 +15,7 @@ import json
 import webbrowser
 import traceback
 import logging
+import shutil
 
 # --- Custom Logger for Debug Console ---
 class QtLogger(logging.Handler):
@@ -31,8 +32,8 @@ try:
 except ImportError: 
     pass
 
-# --- Smart Dependency Checker ---
-def check_dependencies():
+# --- Smart Auto-Installer for System Dependencies ---
+def auto_install_dependencies():
     missing = False
     try:
         import PyQt6
@@ -42,22 +43,43 @@ def check_dependencies():
 
     if missing:
         print("\n" + "="*70)
-        print(" ❌ FEHLENDE PAKETE (MISSING DEPENDENCIES) ❌")
+        print(" 🔄 LADE FEHLENDE PAKETE HERUNTER (AUTO-INSTALLING) 🔄")
         print("="*70)
-        print("Dein Linux-System (Linux Mint/Ubuntu) blockiert automatische")
-        print("'pip'-Installationen aus Sicherheitsgründen (PEP 668).")
-        print("Für grafische Apps unter Linux ist die Installation über")
-        print("den System-Paketmanager ohnehin die stabilere Wahl.")
-        print("\nBitte führe folgenden Befehl in deinem Terminal aus:")
-        print("-" * 70)
-        print("\033[1;32m  sudo apt update && sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine python3-requests \033[0m")
-        print("-" * 70)
-        print("Starte das Skript danach einfach erneut:")
-        print("  sudo python3 hideme_gui.py")
-        print("="*70 + "\n")
-        sys.exit(1)
+        
+        # Check if the system uses 'apt' (Debian/Ubuntu/Mint)
+        if shutil.which("apt"):
+            packages = ["python3-pyqt6", "python3-pyqt6.qtwebengine", "python3-requests"]
+            print("Linux Mint / Ubuntu erkannt.")
+            print("Für maximale Transparenz - folgende offizielle System-Pakete werden jetzt installiert:")
+            for pkg in packages:
+                print(f"  -> {pkg}")
+            print("\nStarte 'apt-get install' im Hintergrund...\n")
+            
+            try:
+                # Update package list silently
+                subprocess.run(["apt-get", "update", "-qq"], check=True)
+                
+                # Install packages automatically (the -y flag says 'yes' to prompts)
+                subprocess.run(["apt-get", "install", "-y"] + packages, check=True)
+                
+                print("\n✅ Installation erfolgreich! Starte App nahtlos neu...\n")
+                print("="*70)
+                
+                # Instantly restart the script to load the new modules
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+                
+            except subprocess.CalledProcessError as e:
+                print(f"\n❌ Fehler bei der automatischen Installation: {e}")
+                print("Bitte versuche es manuell in deinem Terminal:")
+                print(f"sudo apt update && sudo apt install -y {' '.join(packages)}")
+                sys.exit(1)
+        else:
+            print("Dein Paketmanager wird für den Auto-Installer nicht unterstützt.")
+            print("Bitte installiere 'PyQt6', 'PyQt6-WebEngine' und 'requests' manuell über deinen Paketmanager.")
+            sys.exit(1)
 
-check_dependencies()
+# Run the auto-installer before anything else
+auto_install_dependencies()
 
 import requests
 import re
@@ -1346,9 +1368,7 @@ class HideMeOfficialUI(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed:\n{e}")
 
 if __name__ == '__main__':
-    # 1. OS Check: Block everything except Linux immediately
     if not sys.platform.startswith("linux"):
-        # Importiere QApplication nur hier, falls es auf Windows/Mac fehlt, um nicht vorher abzustürzen
         from PyQt6.QtWidgets import QApplication, QMessageBox
         app = QApplication(sys.argv)
         msg = QMessageBox()
@@ -1362,7 +1382,6 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     
-    # 2. Root Check: Required for WireGuard routing on Linux
     if hasattr(os, 'geteuid') and os.geteuid() != 0:
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Warning)
