@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v33)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v34)
 # ==============================================================================
-__version__ = "33.0.0"
+__version__ = "34.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -31,16 +31,33 @@ try:
 except ImportError: 
     pass
 
-# --- Auto-Install Python Modules ---
-def install_and_import():
-    modules = {'PyQt6': 'PyQt6', 'requests': 'requests', 'PyQt6.QtWebEngineWidgets': 'PyQt6-WebEngine'}
-    for mod, pkg in modules.items():
-        try: __import__(mod)
-        except ImportError:
-            print(f"Installing {pkg}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+# --- Smart Dependency Checker ---
+def check_dependencies():
+    missing = False
+    try:
+        import PyQt6
+        import requests
+    except ImportError:
+        missing = True
 
-install_and_import()
+    if missing:
+        print("\n" + "="*70)
+        print(" ❌ FEHLENDE PAKETE (MISSING DEPENDENCIES) ❌")
+        print("="*70)
+        print("Dein Linux-System (Linux Mint/Ubuntu) blockiert automatische")
+        print("'pip'-Installationen aus Sicherheitsgründen (PEP 668).")
+        print("Für grafische Apps unter Linux ist die Installation über")
+        print("den System-Paketmanager ohnehin die stabilere Wahl.")
+        print("\nBitte führe folgenden Befehl in deinem Terminal aus:")
+        print("-" * 70)
+        print("\033[1;32m  sudo apt update && sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine python3-requests \033[0m")
+        print("-" * 70)
+        print("Starte das Skript danach einfach erneut:")
+        print("  sudo python3 hideme_gui.py")
+        print("="*70 + "\n")
+        sys.exit(1)
+
+check_dependencies()
 
 import requests
 import re
@@ -74,7 +91,6 @@ except ImportError:
     WEB_ENGINE_AVAILABLE = False
 
 # --- Configuration Paths ---
-# OS verification happens before this path is used, so it's always Linux valid here.
 CONFIG_DIR = "/etc/hide.me"
 LOG_FILE = os.path.join(CONFIG_DIR, "system_logs.json")
 THEME_FILE = os.path.join(CONFIG_DIR, "theme.conf")
@@ -1330,11 +1346,11 @@ class HideMeOfficialUI(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed:\n{e}")
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-    
     # 1. OS Check: Block everything except Linux immediately
     if not sys.platform.startswith("linux"):
+        # Importiere QApplication nur hier, falls es auf Windows/Mac fehlt, um nicht vorher abzustürzen
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        app = QApplication(sys.argv)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle("Unsupported Operating System")
@@ -1343,6 +1359,9 @@ if __name__ == '__main__':
         msg.exec()
         sys.exit(1)
         
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    
     # 2. Root Check: Required for WireGuard routing on Linux
     if hasattr(os, 'geteuid') and os.geteuid() != 0:
         msg = QMessageBox()
