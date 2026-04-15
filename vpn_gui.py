@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Edition (OS Guard, Flags, About Tab)
+# hide.me VPN Manager GUI - Autostart & Auto-Connect Edition
 # ==============================================================================
-__version__ = "11.0.0"
+__version__ = "12.0.0"
 __date__ = "April 15, 2026"
 __user__ = "Sebastian Rößer"
 
@@ -14,6 +14,7 @@ import time
 import shutil
 import random
 import webbrowser
+import pwd
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -27,43 +28,80 @@ def install_and_import(package):
     finally:
         globals()[package] = __import__(package)
 
-# Ensure 'requests' is available before we proceed
 if sys.platform.startswith('linux'):
     install_and_import('requests')
 
-# --- Installation & Update Logic ---
+# --- Configuration Paths ---
 CONFIG_DIR = "/etc/hide.me"
 VERSION_FILE = os.path.join(CONFIG_DIR, ".gui_version")
 AUTO_UPDATE_FILE = os.path.join(CONFIG_DIR, ".auto_update")
+AUTO_CONNECT_FILE = os.path.join(CONFIG_DIR, ".auto_connect")
 
-def is_hideme_installed():
-    return shutil.which("hide.me") is not None
+# --- User & Autostart Logic ---
+def get_real_user():
+    return os.environ.get('SUDO_USER', os.environ.get('USER', 'root'))
 
-def run_hideme_installer():
+def get_real_home():
+    user = get_real_user()
     try:
-        cmd = (
-            "mkdir -p /tmp/hideme_install && "
-            "cd /tmp/hideme_install && "
-            "curl -L https://hide.me/download/linux-amd64 | tar -xz && "
-            "chmod +x install.sh && "
-            "./install.sh"
-        )
-        subprocess.run(cmd, shell=True, check=True)
-        
-        try:
-            resp = requests.get("https://api.github.com/repos/eventure/hide.client.linux/releases/latest", timeout=5)
-            if resp.status_code == 200:
-                latest_tag = resp.json().get("tag_name", "").lstrip("v")
-                os.makedirs(CONFIG_DIR, exist_ok=True)
-                with open(VERSION_FILE, "w") as f:
-                    f.write(latest_tag)
-        except Exception:
-            pass
-            
-    except Exception as e:
-        messagebox.showerror("Installation Error", f"An error occurred during installation:\n{e}")
-        sys.exit(1)
+        return pwd.getpwnam(user).pw_dir
+    except:
+        return os.path.expanduser('~')
 
+def is_autostart_enabled():
+    home = get_real_home()
+    desktop_file = os.path.join(home, ".config", "autostart", "hideme-vpn-gui.desktop")
+    return os.path.exists(desktop_file)
+
+def setup_autostart(enable):
+    user = get_real_user()
+    home = get_real_home()
+    script_path = os.path.abspath(sys.argv[0])
+    python_exe = sys.executable
+
+    desktop_dir = os.path.join(home, ".config", "autostart")
+    desktop_file = os.path.join(desktop_dir, "hideme-vpn-gui.desktop")
+    sudoers_file = "/etc/sudoers.d/hideme_vpn_gui"
+
+    if enable:
+        # Create a passwordless sudo rule for this specific script
+        sudo_rule = f"{user} ALL=(root) NOPASSWD: {python_exe} {script_path}\n"
+        try:
+            with open(sudoers_file, "w") as f:
+                f.write(sudo_rule)
+            os.chmod(sudoers_file, 0o440)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to create sudoers rule:\n{e}")
+            return
+
+        # Create the autostart entry for the user
+        os.makedirs(desktop_dir, exist_ok=True)
+        desktop_content = f"""[Desktop Entry]
+Type=Application
+Exec=sudo {python_exe} {script_path}
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=hide.me VPN Manager
+Comment=Starts hide.me VPN securely on boot
+"""
+        try:
+            with open(desktop_file, "w") as f:
+                f.write(desktop_content)
+            # Ensure the real user owns their autostart file
+            uid = pwd.getpwnam(user).pw_uid
+            gid = pwd.getpwnam(user).pw_gid
+            os.chown(desktop_file, uid, gid)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to create autostart entry:\n{e}")
+    else:
+        # Remove both files if disabling
+        if os.path.exists(sudoers_file):
+            os.remove(sudoers_file)
+        if os.path.exists(desktop_file):
+            os.remove(desktop_file)
+
+# --- App Config Settings ---
 def get_auto_update_pref():
     if os.path.exists(AUTO_UPDATE_FILE):
         with open(AUTO_UPDATE_FILE, "r") as f:
@@ -75,12 +113,22 @@ def save_auto_update_pref(state):
     with open(AUTO_UPDATE_FILE, "w") as f:
         f.write(str(state))
 
+def get_auto_connect_pref():
+    if os.path.exists(AUTO_CONNECT_FILE):
+        with open(AUTO_CONNECT_FILE, "r") as f:
+            return f.read().strip().lower() == "true"
+    return False
+
+def save_auto_connect_pref(state):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(AUTO_CONNECT_FILE, "w") as f:
+        f.write(str(state))
+
 def check_for_updates(manual=False):
     try:
         resp = requests.get("https://api.github.com/repos/eventure/hide.client.linux/releases/latest", timeout=3)
         if resp.status_code == 200:
             latest_tag = resp.json().get("tag_name", "").lstrip("v")
-            
             local_ver = "0.0.0"
             if os.path.exists(VERSION_FILE):
                 with open(VERSION_FILE, "r") as f:
@@ -103,16 +151,10 @@ def check_for_updates(manual=False):
             else:
                 if manual:
                     messagebox.showinfo("Up to Date", f"You are already using the latest version ({local_ver}).")
-        else:
-            if manual:
-                messagebox.showerror("Error", "Could not reach GitHub API to check for updates.")
     except Exception as e:
-        if manual:
-            messagebox.showerror("Error", f"Update check failed:\n{e}")
-        print("Update check skipped/failed:", e)
+        pass
 
 
-# --- Network Helper ---
 def get_local_subnet():
     try:
         route_out = subprocess.check_output(["ip", "route"]).decode()
@@ -163,9 +205,8 @@ class HideMeVPNApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"hide.me VPN Pro - {__user__}")
-        self.root.geometry("480x830")
+        self.root.geometry("480x880")
         
-        # --- Handle Window Close Event ---
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.bg_main = "#10151E"
@@ -188,7 +229,7 @@ class HideMeVPNApp:
         self.location_var = tk.StringVar(value="Location: -")
         self.last_state = None
         
-        # --- Server Mapping with Flags ---
+        # Server Mapping
         self.server_mapping = {
             "🎲 Random Free Server": "Random Free Server",
             "🇩🇪 free-de": "free-de",
@@ -204,6 +245,7 @@ class HideMeVPNApp:
         self.free_servers = ["free-de", "free-fr", "free-nl", "free-ch", "free-uk", "free-us", "free-fi", "free-sg"]
         self.server_var = tk.StringVar(value="🎲 Random Free Server")
         
+        # Variables
         self.split_var = tk.BooleanVar(value=True)       
         self.subnet_var = tk.StringVar(value=get_local_subnet()) 
         self.protocol_var = tk.StringVar(value="Auto")   
@@ -222,13 +264,21 @@ class HideMeVPNApp:
         self.token_path_var = tk.StringVar(value="/etc/hide.me/accessToken.txt")
         self.use_custom_dns_var = tk.BooleanVar(value=False) 
         self.custom_dns_var = tk.StringVar(value="1.1.1.1,1.0.0.1")
+        
+        # Persistent Preferences
         self.auto_update_var = tk.BooleanVar(value=get_auto_update_pref())
+        self.auto_start_var = tk.BooleanVar(value=is_autostart_enabled())
+        self.auto_connect_var = tk.BooleanVar(value=get_auto_connect_pref())
         
         self.build_ui()
         threading.Thread(target=self.monitor_daemon, daemon=True).start()
+        
+        # --- AUTO-CONNECT LOGIC ---
+        if self.auto_connect_var.get() and not self.check_process():
+            # Wait 2 seconds for UI and network stack to settle before connecting
+            self.root.after(2000, self.connect_vpn)
 
     def on_closing(self):
-        """Called automatically when the user clicks the X to close the window"""
         if self.check_process():
             res = messagebox.askyesno(
                 "Disconnect VPN?",
@@ -242,7 +292,7 @@ class HideMeVPNApp:
                 self.root.destroy()
                 sys.exit(0)
             else:
-                return # User clicked NO, keep app open
+                return 
         else:
             self.root.destroy()
             sys.exit(0)
@@ -352,10 +402,23 @@ class HideMeVPNApp:
         ttk.Checkbutton(f3, text="Custom DNS (-d)", variable=self.use_custom_dns_var).pack(side='left')
         ttk.Entry(f3, textvariable=self.custom_dns_var, width=15).pack(side='right', fill='x', expand=True, padx=(10,0))
 
+        # --- Automation Switches ---
         f4 = ttk.Frame(tab_adv, style='Card.TFrame')
         f4.pack(fill='x', padx=15, pady=(15, 5))
-        ttk.Checkbutton(f4, text="Check updates on start", variable=self.auto_update_var, command=self.toggle_auto_update).pack(side='left')
+        c_up = ttk.Checkbutton(f4, text="Check updates on start", variable=self.auto_update_var, command=self.toggle_auto_update)
+        c_up.pack(side='left')
         ttk.Button(f4, text="Check Now", style='Small.TButton', command=lambda: check_for_updates(manual=True)).pack(side='right', padx=(10,0))
+        
+        f5 = ttk.Frame(tab_adv, style='Card.TFrame')
+        f5.pack(fill='x', padx=15, pady=5)
+        c_auto = ttk.Checkbutton(f5, text="Launch on system startup", variable=self.auto_start_var, command=self.toggle_auto_start)
+        c_auto.pack(side='left')
+        ToolTip(c_auto, "Creates a secure sudoers rule so this app can start automatically\nin the background without asking for your password.")
+
+        f6 = ttk.Frame(tab_adv, style='Card.TFrame')
+        f6.pack(fill='x', padx=15, pady=5)
+        c_conn = ttk.Checkbutton(f6, text="Auto-connect on launch", variable=self.auto_connect_var, command=self.toggle_auto_connect)
+        c_conn.pack(side='left')
 
         # Tab 4: About / Info
         tab_about = ttk.Frame(notebook, style='Card.TFrame')
@@ -377,6 +440,12 @@ class HideMeVPNApp:
 
     def toggle_auto_update(self):
         save_auto_update_pref(self.auto_update_var.get())
+
+    def toggle_auto_start(self):
+        setup_autostart(self.auto_start_var.get())
+        
+    def toggle_auto_connect(self):
+        save_auto_connect_pref(self.auto_connect_var.get())
 
     def check_process(self):
         try:
@@ -447,7 +516,6 @@ class HideMeVPNApp:
 
         cmd.append("connect")
         
-        # Resolve the server name from the display text (remove emojis)
         srv_display = self.server_var.get().strip()
         srv = self.server_mapping.get(srv_display, srv_display)
         
@@ -470,26 +538,16 @@ class HideMeVPNApp:
         subprocess.Popen(["sudo", "killall", "hide.me"])
 
 if __name__ == "__main__":
-    
-    # --- 1. OS Compatibility Check ---
     if not sys.platform.startswith('linux'):
-        # Try to show a nice GUI error on Windows/Mac, fallback to console print
         try:
             root = tk.Tk()
             root.withdraw()
-            messagebox.showerror(
-                "Unsupported Operating System", 
-                "This hide.me VPN Manager is built exclusively for Linux.\n\n"
-                "It relies on the Linux-specific hide.me CLI and native networking commands (like 'ip route'). "
-                "It cannot run on Windows or macOS."
-            )
+            messagebox.showerror("Unsupported OS", "This hide.me VPN Manager is built exclusively for Linux.")
             root.destroy()
         except:
-            print("Error: This hide.me VPN Manager is designed exclusively for Linux.")
-            print("It cannot run on Windows or macOS.")
+            print("Error: This tool is for Linux only.")
         sys.exit(1)
     
-    # --- 2. Root Privilege Check (Only runs on Linux) ---
     if os.geteuid() != 0:
         print("Notice: This script requires Root/Sudo privileges.")
         print("Please start it using: sudo python3 vpn_gui.py")
