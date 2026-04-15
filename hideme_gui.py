@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v29)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v30)
 # ==============================================================================
-__version__ = "29.0.0"
+__version__ = "30.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -227,7 +227,7 @@ class CardWidget(QFrame):
         self.layout.setContentsMargins(15, 15, 15, 15)
         
         if is_square:
-            self.setFixedSize(270, 270) # Force exact square dimension for Dashboard grids
+            self.setFixedSize(270, 270)
         else:
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             
@@ -451,10 +451,12 @@ class HideMeOfficialUI(QMainWindow):
         
         self.btn_theme = QPushButton("🌙" if self.current_theme == "light" else "☀️")
         self.btn_theme.setObjectName("TopIconBtn")
+        self.btn_theme.setToolTip("Toggle Light/Dark Theme")
         self.btn_theme.clicked.connect(self.toggle_theme)
         
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
+        btn_bug.setToolTip("Report a bug on GitHub")
         btn_bug.clicked.connect(lambda: webbrowser.open("https://github.com/basecore/hideme2-vpn-manager/issues"))
         
         top_layout.addWidget(self.btn_theme)
@@ -644,6 +646,7 @@ class HideMeOfficialUI(QMainWindow):
         header_layout.addStretch()
         btn_edit = QPushButton("📝 Edit Mode")
         btn_edit.setObjectName("TopIconBtn")
+        btn_edit.setToolTip("Customize the widgets shown on your Dashboard")
         btn_edit.clicked.connect(self.edit_dashboard)
         header_layout.addWidget(btn_edit)
         layout.addLayout(header_layout)
@@ -674,6 +677,7 @@ class HideMeOfficialUI(QMainWindow):
         
         btn_ping = QPushButton("⚡ Test Ping")
         btn_ping.setFixedHeight(40)
+        btn_ping.setToolTip("Check network latency (response time) to the selected server before connecting.")
         btn_ping.clicked.connect(self.run_ping)
         self.lbl_ping_res = QLabel("- ms")
         self.lbl_ping_res.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 14px;")
@@ -769,20 +773,32 @@ class HideMeOfficialUI(QMainWindow):
         
         # 1. Protocol Tab
         t_proto = QWidget(); l_proto = QVBoxLayout(t_proto)
-        self.r_auto = QRadioButton("Automatic (Recommended)"); self.r_auto.setChecked(True)
-        self.r_v4 = QRadioButton("IPv4 Only (-4)"); self.r_v6 = QRadioButton("IPv6 Only (-6)")
+        self.r_auto = QRadioButton("Automatic (Recommended)")
+        self.r_auto.setToolTip("Let the client automatically decide whether to use IPv4 or IPv6 addressing.")
+        self.r_auto.setChecked(True)
+        
+        self.r_v4 = QRadioButton("IPv4 Only (-4)")
+        self.r_v4.setToolTip("Force connection over IPv4. Warning: IPv6 traffic will bypass the VPN completely!")
+        
+        self.r_v6 = QRadioButton("IPv6 Only (-6)")
+        self.r_v6.setToolTip("Force connection over IPv6. Warning: IPv4 traffic will bypass the VPN completely!")
+        
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
         
-        # 2. Kill Switch Tab
+        # 2. Kill Switch Tab 
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
         self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)")
+        self.chk_kill.setToolTip("If the VPN connection drops unexpectedly, all internet traffic will be blocked to prevent IP leaks.")
         self.chk_kill.setChecked(True)
         
         self.chk_lan = QCheckBox("Allow local network connections (LAN access)")
+        self.chk_lan.setToolTip("Exclude your home network (e.g., printers, smart home devices) from the VPN tunnel so they remain accessible.")
         self.chk_lan.setChecked(True)
+        
         self.inp_lan = QLineEdit(get_local_subnet())
         self.inp_lan.setPlaceholderText("e.g. 192.168.1.0/24")
+        self.inp_lan.setToolTip("Your local subnet. This is auto-detected, but you can override it if you have a custom network setup.")
         self.inp_lan.setFixedWidth(180)
         
         h_lan = QHBoxLayout()
@@ -794,28 +810,46 @@ class HideMeOfficialUI(QMainWindow):
         l_kill.addLayout(h_lan)
         
         l_kill.addWidget(QLabel("\nExecute custom script when triggered:", objectName="CardTitle"))
-        l_kill.addWidget(QLineEdit("/path/to/script.sh"))
+        self.inp_script = QLineEdit("/path/to/script.sh")
+        self.inp_script.setToolTip("Path to a bash script that will automatically run if the Kill Switch triggers (e.g. to close specific apps).")
+        l_kill.addWidget(self.inp_script)
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
         
-        # 3. Filters & Routing Tab (Expanded SmartGuard Options)
+        # 3. Filters & Routing Tab
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
         
         l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
         self.chk_split = QCheckBox("Exclude specific external IP addresses or subnets (-s)")
+        self.chk_split.setToolTip("Route specific internet traffic outside the secure VPN tunnel (useful for specific gaming servers or local streaming services).")
+        
         self.inp_subnet = QLineEdit()
         self.inp_subnet.setPlaceholderText("e.g. 8.8.8.8/32, 10.0.0.0/8")
+        self.inp_subnet.setToolTip("Enter specific IP ranges (CIDR notation) separated by commas.")
         l_filt.addWidget(self.chk_split); l_filt.addWidget(self.inp_subnet)
         
         l_filt.addWidget(QLabel("\nStealthGuard & Server Filters:", objectName="CardTitle"))
-        self.chk_pf = QCheckBox("Port Forwarding (-pf)")
-        self.chk_track = QCheckBox("Block Trackers (-noTrackers)"); self.chk_track.setChecked(True)
-        self.chk_ads = QCheckBox("Block Ads (-noAds)")
-        self.chk_malware = QCheckBox("Block Malware (-noMalware)")
         
-        # Added new filter options
+        self.chk_pf = QCheckBox("Port Forwarding (-pf)")
+        self.chk_pf.setToolTip("Enable dynamic port forwarding (UPnP/NAT-PMP) through the VPN. Requires support on the selected server.")
+        
+        self.chk_track = QCheckBox("Block Trackers (-noTrackers)")
+        self.chk_track.setToolTip("SmartGuard: Blocks known tracking domains to enhance privacy.")
+        self.chk_track.setChecked(True)
+        
+        self.chk_ads = QCheckBox("Block Ads (-noAds)")
+        self.chk_ads.setToolTip("SmartGuard: Operates similarly to a browser-level ad-blocker but across your entire system connection.")
+        
+        self.chk_malware = QCheckBox("Block Malware (-noMalware)")
+        self.chk_malware.setToolTip("SmartGuard: Blocks domains known for distributing malware or running botnets.")
+        
         self.chk_malicious = QCheckBox("Block Malicious Sites (--noMalicious)")
+        self.chk_malicious.setToolTip("SmartGuard: Filters out dangerous sites (phishing, scams) based on an extensive threat database.")
+        
         self.chk_illegal = QCheckBox("Block Illegal Content (--noIllegal)")
+        self.chk_illegal.setToolTip("SmartGuard: Coarse-level filtering of warez, spyware, and copyrighted material distribution sites.")
+        
         self.chk_safe = QCheckBox("Enforce SafeSearch (--safeSearch)")
+        self.chk_safe.setToolTip("SmartGuard: Forces SafeSearch mode automatically on supported search engines like Google and Bing.")
         
         for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware, self.chk_malicious, self.chk_illegal, self.chk_safe]: 
             l_filt.addWidget(c)
@@ -825,19 +859,27 @@ class HideMeOfficialUI(QMainWindow):
         # 4. Advanced Tab
         t_adv = QWidget(); l_adv = QVBoxLayout(t_adv)
         self.chk_debug_mode = QCheckBox("Enable Debug Logging in Console")
+        self.chk_debug_mode.setToolTip("Shows a raw terminal output in the sidebar to monitor hide.me CLI background commands and errors in real-time.")
         self.chk_debug_mode.setChecked(self.app_settings.get("debug_mode", False))
         self.chk_debug_mode.stateChanged.connect(self.toggle_debug_mode)
         l_adv.addWidget(self.chk_debug_mode)
         l_adv.addStretch(); tabs.addTab(t_adv, "Advanced")
 
-        # 5. Expert Tab (For advanced CLI flags)
+        # 5. Expert Tab
         t_exp = QWidget(); l_exp = QVBoxLayout(t_exp)
         
         l_exp.addWidget(QLabel("DNS & Name Resolution:", objectName="CardTitle"))
+        
         self.chk_doh = QCheckBox("Disable DNS-over-HTTPS (--doh)")
+        self.chk_doh.setToolTip("The client prioritizes DNS-over-HTTPS for privacy. Check this to fall back to plain, unencrypted DNS requests.")
+        
         self.chk_force_dns = QCheckBox("Force DNS handling on VPN server (--forceDns)")
+        self.chk_force_dns.setToolTip("Forces all system DNS requests (UDP/TCP) to be strictly redirected to and resolved by the Hide.me VPN server.")
+        
         self.inp_dns = QLineEdit()
         self.inp_dns.setPlaceholderText("Custom DNS Servers (comma separated, e.g. 1.1.1.1:53)")
+        self.inp_dns.setToolTip("Override the default hide.me DNS servers. Useful if you want to use Cloudflare (1.1.1.1) or your own Pi-Hole over the VPN.")
+        
         l_exp.addWidget(self.chk_doh); l_exp.addWidget(self.chk_force_dns); l_exp.addWidget(self.inp_dns)
         
         l_exp.addWidget(QLabel("\nWireGuard & Network Interfaces:", objectName="CardTitle"))
@@ -846,6 +888,7 @@ class HideMeOfficialUI(QMainWindow):
         h_iface.addWidget(QLabel("Interface Name (-i):"))
         self.inp_iface = QLineEdit()
         self.inp_iface.setPlaceholderText("vpn")
+        self.inp_iface.setToolTip("Define a custom name for the created virtual network adapter. Default is 'vpn'.")
         h_iface.addWidget(self.inp_iface)
         l_exp.addLayout(h_iface)
         
@@ -853,6 +896,7 @@ class HideMeOfficialUI(QMainWindow):
         h_port.addWidget(QLabel("Listen Port (-l):"))
         self.inp_port = QLineEdit()
         self.inp_port.setPlaceholderText("Random")
+        self.inp_port.setToolTip("Set a specific local port for encrypted WireGuard traffic. Usually left random to bypass local firewall restrictions.")
         h_port.addWidget(self.inp_port)
         l_exp.addLayout(h_port)
         
@@ -860,6 +904,7 @@ class HideMeOfficialUI(QMainWindow):
         h_dpd.addWidget(QLabel("DPD Timeout (--dpd):"))
         self.inp_dpd = QLineEdit()
         self.inp_dpd.setPlaceholderText("e.g. 1m0s")
+        self.inp_dpd.setToolTip("Dead Peer Detection Timeout. Controls how often the client checks if the VPN tunnel has stalled. Max is 1m0s.")
         h_dpd.addWidget(self.inp_dpd)
         l_exp.addLayout(h_dpd)
         
@@ -885,11 +930,24 @@ class HideMeOfficialUI(QMainWindow):
         
         tabs = QTabWidget()
         t_opts = QWidget(); l_opts = QVBoxLayout(t_opts)
+        
         self.chk_autostart = QCheckBox("Launch hide.me on system startup")
+        self.chk_autostart.setToolTip("Automatically opens this GUI when you log into your operating system.")
+        
         self.chk_autoconnect = QCheckBox("Auto-connect VPN on app launch")
-        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup"); self.chk_autoupdate.setChecked(True)
-        self.chk_notif = QCheckBox("Enable Native Desktop Notifications"); self.chk_notif.setChecked(True)
-        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)"); self.chk_tray.setChecked(True)
+        self.chk_autoconnect.setToolTip("Automatically establishes a VPN connection to the 'Best Location' when the application starts.")
+        
+        self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup")
+        self.chk_autoupdate.setToolTip("Silently checks the GitHub repository for new backend hide.me CLI updates and installs them in the background.")
+        self.chk_autoupdate.setChecked(True)
+        
+        self.chk_notif = QCheckBox("Enable Native Desktop Notifications")
+        self.chk_notif.setToolTip("Shows system notifications (toast messages) when the VPN successfully connects or disconnects.")
+        self.chk_notif.setChecked(True)
+        
+        self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)")
+        self.chk_tray.setToolTip("Keeps the app running in your system tray (bottom right corner) instead of closing it entirely when you hit the X button.")
+        self.chk_tray.setChecked(True)
         self.chk_tray.stateChanged.connect(self.toggle_tray_visibility)
         
         l_opts.addWidget(QLabel("Automation Setup:", objectName="CardTitle"))
@@ -914,6 +972,7 @@ class HideMeOfficialUI(QMainWindow):
         self.log_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         
         btn_clear = QPushButton("Clear / Delete Logs")
+        btn_clear.setToolTip("Wipes all connection history from your local settings file.")
         btn_clear.clicked.connect(self.clear_logs)
         btn_clear.setFixedWidth(150)
         
@@ -1041,6 +1100,8 @@ class HideMeOfficialUI(QMainWindow):
             QMessageBox {{ background-color: {card_bg}; color: {text_main}; }}
             QPushButton {{ background-color: {bg_main}; color: {text_main}; padding: 8px; border-radius: 4px; border: 1px solid {card_border}; font-weight:bold; }}
             QPushButton:hover {{ background-color: {card_bg}; }}
+            
+            QToolTip {{ color: #ffffff; background-color: #132233; border: 1px solid #2BAEE0; font-size: 12px; padding: 4px; }}
         """
         self.setStyleSheet(css)
 
