@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Auto-Disconnect Edition
+# hide.me VPN Manager GUI - Ultimate Edition (Flags, Warnings & About Tab)
 # ==============================================================================
-__version__ = "9.0.0"
+__version__ = "10.0.0"
 __date__ = "April 15, 2026"
 __user__ = "Sebastian Rößer"
 
@@ -13,6 +13,7 @@ import threading
 import time
 import shutil
 import random
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -160,7 +161,7 @@ class HideMeVPNApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"hide.me VPN Pro - {__user__}")
-        self.root.geometry("480x810")
+        self.root.geometry("480x830")
         
         # --- Handle Window Close Event ---
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -183,8 +184,23 @@ class HideMeVPNApp:
         self.status_var = tk.StringVar(value="🔴 UNPROTECTED")
         self.ip_var = tk.StringVar(value="IP: Loading...")
         self.location_var = tk.StringVar(value="Location: -")
-        self.server_var = tk.StringVar(value="Random Free Server")
         self.last_state = None
+        
+        # --- Server Mapping with Flags ---
+        self.server_mapping = {
+            "🎲 Random Free Server": "Random Free Server",
+            "🇩🇪 free-de": "free-de",
+            "🇫🇷 free-fr": "free-fr",
+            "🇳🇱 free-nl": "free-nl",
+            "🇨🇭 free-ch": "free-ch",
+            "🇬🇧 free-uk": "free-uk",
+            "🇺🇸 free-us": "free-us",
+            "🇫🇮 free-fi": "free-fi",
+            "🇸🇬 free-sg": "free-sg",
+            "⚙️ Custom Server...": "Custom Server..."
+        }
+        self.free_servers = ["free-de", "free-fr", "free-nl", "free-ch", "free-uk", "free-us", "free-fi", "free-sg"]
+        self.server_var = tk.StringVar(value="🎲 Random Free Server")
         
         self.split_var = tk.BooleanVar(value=True)       
         self.subnet_var = tk.StringVar(value=get_local_subnet()) 
@@ -206,24 +222,28 @@ class HideMeVPNApp:
         self.custom_dns_var = tk.StringVar(value="1.1.1.1,1.0.0.1")
         self.auto_update_var = tk.BooleanVar(value=get_auto_update_pref())
         
-        self.free_servers = [
-            "free-de", "free-fr", "free-nl", "free-ch", 
-            "free-uk", "free-us", "free-fi", "free-sg"
-        ]
-        self.servers = ["Random Free Server"] + self.free_servers + ["Custom Server..."]
-        
         self.build_ui()
         threading.Thread(target=self.monitor_daemon, daemon=True).start()
 
     def on_closing(self):
         """Called automatically when the user clicks the X to close the window"""
         if self.check_process():
-            print("Closing application: Disconnecting VPN safely...")
-            self.disconnect_vpn()
-            # Wait 1.5 seconds for hide.me to safely restore the DNS & routing tables
-            time.sleep(1.5)
-        self.root.destroy()
-        sys.exit(0)
+            res = messagebox.askyesno(
+                "Disconnect VPN?",
+                "Closing the application will DISCONNECT your VPN and leave your internet traffic unprotected.\n\nAre you sure you want to close and browse unprotected?",
+                icon='warning'
+            )
+            if res:
+                print("Closing application: Disconnecting VPN safely...")
+                self.disconnect_vpn()
+                time.sleep(1.5)
+                self.root.destroy()
+                sys.exit(0)
+            else:
+                return # User clicked NO, keep app open
+        else:
+            self.root.destroy()
+            sys.exit(0)
 
     def setup_styles(self):
         self.style.configure('TFrame', background=self.bg_main)
@@ -251,9 +271,12 @@ class HideMeVPNApp:
         
         self.style.configure('Small.TButton', font=('Helvetica', 9, 'bold'), background="#2d3748", foreground=self.text_white)
         self.style.map('Small.TButton', background=[('active', '#4a5568')])
+        
+        self.style.configure('Link.TButton', font=('Helvetica', 10, 'bold'), background="#1e293b", foreground=self.brand_cyan)
+        self.style.map('Link.TButton', background=[('active', '#334155')])
 
     def build_ui(self):
-        # Header (Logo & Personal Info)
+        # Header
         logo_frame = ttk.Frame(self.root)
         logo_frame.pack(pady=(15, 0))
         ttk.Label(logo_frame, text="hide.me", style='Brand.TLabel').pack(side='left')
@@ -274,7 +297,7 @@ class HideMeVPNApp:
         server_card = ttk.Frame(self.root, style='Card.TFrame')
         server_card.pack(fill='x', padx=20, pady=5, ipady=5)
         ttk.Label(server_card, text="Select Location:", style='Card.TLabel', font=('Helvetica', 10, 'bold'), foreground=self.text_grey).pack(anchor='w', padx=15, pady=(5, 2))
-        ttk.Combobox(server_card, textvariable=self.server_var, values=self.servers, font=('Helvetica', 11)).pack(fill='x', padx=15, pady=(0, 5))
+        ttk.Combobox(server_card, textvariable=self.server_var, values=list(self.server_mapping.keys()), font=('Helvetica', 11)).pack(fill='x', padx=15, pady=(0, 5))
 
         # --- Tabs ---
         notebook = ttk.Notebook(self.root)
@@ -283,14 +306,12 @@ class HideMeVPNApp:
         # Tab 1: Network
         tab_net = ttk.Frame(notebook, style='Card.TFrame')
         notebook.add(tab_net, text="Network")
-        
         split_frame = ttk.Frame(tab_net, style='Card.TFrame')
         split_frame.pack(fill='x', padx=15, pady=(15, 5))
         c1 = ttk.Checkbutton(split_frame, text="Split Tunneling (-s)", variable=self.split_var)
         c1.pack(side='left')
         ttk.Entry(split_frame, textvariable=self.subnet_var, width=18).pack(side='right', fill='x', expand=True, padx=(10,0))
         ToolTip(c1, "Bypass the VPN for local IPs (e.g. Router, NAS).\nYour current subnet is automatically populated.")
-        
         ttk.Checkbutton(tab_net, text="Enable Kill-Switch (-k)", variable=self.killswitch_var).pack(anchor='w', padx=15, pady=5)
         ttk.Checkbutton(tab_net, text="Enable Port-Forwarding (-pf)", variable=self.pf_var).pack(anchor='w', padx=15, pady=5)
 
@@ -303,8 +324,8 @@ class HideMeVPNApp:
 
         # Tab 2: Security & Filters
         tab_filter = ttk.Frame(notebook, style='Card.TFrame')
-        notebook.add(tab_filter, text="Security & Filters")
-        ttk.Label(tab_filter, text="Note: Filters are processed remotely on the VPN server.", style='Card.TLabel', foreground=self.text_grey).pack(anchor='w', padx=15, pady=(15, 10))
+        notebook.add(tab_filter, text="Filters")
+        ttk.Label(tab_filter, text="Note: Filters are processed remotely on the server.", style='Card.TLabel', foreground=self.text_grey).pack(anchor='w', padx=15, pady=(15, 10))
         ttk.Checkbutton(tab_filter, text="Block Ads (-noAds)", variable=self.no_ads_var).pack(anchor='w', padx=15, pady=4)
         ttk.Checkbutton(tab_filter, text="Block Malware (-noMalware)", variable=self.no_malware_var).pack(anchor='w', padx=15, pady=4)
         ttk.Checkbutton(tab_filter, text="Block Trackers (-noTrackers)", variable=self.no_trackers_var).pack(anchor='w', padx=15, pady=4)
@@ -331,8 +352,20 @@ class HideMeVPNApp:
 
         f4 = ttk.Frame(tab_adv, style='Card.TFrame')
         f4.pack(fill='x', padx=15, pady=(15, 5))
-        ttk.Checkbutton(f4, text="Check for updates on startup", variable=self.auto_update_var, command=self.toggle_auto_update).pack(side='left')
+        ttk.Checkbutton(f4, text="Check updates on start", variable=self.auto_update_var, command=self.toggle_auto_update).pack(side='left')
         ttk.Button(f4, text="Check Now", style='Small.TButton', command=lambda: check_for_updates(manual=True)).pack(side='right', padx=(10,0))
+
+        # Tab 4: About / Info
+        tab_about = ttk.Frame(notebook, style='Card.TFrame')
+        notebook.add(tab_about, text="About")
+        ttk.Label(tab_about, text="hideme-vpn-manager", font=('Helvetica', 14, 'bold'), style='Card.TLabel').pack(pady=(20, 5))
+        ttk.Label(tab_about, text="Powered by Python & Gemini 3.1 Pro Thinking", style='Card.TLabel', foreground=self.text_grey).pack(pady=(0, 20))
+        
+        def open_repo(): webbrowser.open("https://github.com/basecore/hideme-vpn-manager/tree/main")
+        def open_issues(): webbrowser.open("https://github.com/basecore/hideme-vpn-manager/issues")
+        
+        ttk.Button(tab_about, text="⭐ View GitHub Repository", style='Link.TButton', command=open_repo).pack(pady=5, padx=30, fill='x', ipady=5)
+        ttk.Button(tab_about, text="🐛 Report an Issue", style='Link.TButton', command=open_issues).pack(pady=5, padx=30, fill='x', ipady=5)
 
         # Footer Buttons
         btn_frame = ttk.Frame(self.root)
@@ -412,7 +445,10 @@ class HideMeVPNApp:
 
         cmd.append("connect")
         
-        srv = self.server_var.get()
+        # Resolve the server name from the display text (remove emojis)
+        srv_display = self.server_var.get().strip()
+        srv = self.server_mapping.get(srv_display, srv_display)
+        
         if srv == "Custom Server...":
             messagebox.showwarning("Notice", "Please enter a valid server name in the dropdown menu.")
             return
