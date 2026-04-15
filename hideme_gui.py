@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v31)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v32)
 # ==============================================================================
-__version__ = "31.0.0"
+__version__ = "32.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -368,7 +368,7 @@ class HideMeOfficialUI(QMainWindow):
             try:
                 with open(SETTINGS_FILE, "r") as f: return json.load(f)
             except: pass
-        return {"debug_mode": False}
+        return {"debug_mode": False, "incognito_mode": False}
 
     def save_app_settings(self):
         with open(SETTINGS_FILE, "w") as f: json.dump(self.app_settings, f)
@@ -858,11 +858,19 @@ class HideMeOfficialUI(QMainWindow):
 
         # 4. Advanced Tab
         t_adv = QWidget(); l_adv = QVBoxLayout(t_adv)
+        
         self.chk_debug_mode = QCheckBox("Enable Debug Logging in Console")
         self.chk_debug_mode.setToolTip("Shows a raw terminal output in the sidebar to monitor hide.me CLI background commands and errors in real-time.")
         self.chk_debug_mode.setChecked(self.app_settings.get("debug_mode", False))
         self.chk_debug_mode.stateChanged.connect(self.toggle_debug_mode)
+        
+        self.chk_incognito = QCheckBox("Incognito Mode (Wipe connection logs on exit)")
+        self.chk_incognito.setToolTip("When enabled, all local logs, debug data, and connection history will be securely deleted when the application closes. Like a private tab for your VPN.")
+        self.chk_incognito.setChecked(self.app_settings.get("incognito_mode", False))
+        self.chk_incognito.stateChanged.connect(self.toggle_incognito)
+        
         l_adv.addWidget(self.chk_debug_mode)
+        l_adv.addWidget(self.chk_incognito)
         l_adv.addStretch(); tabs.addTab(t_adv, "Advanced")
 
         # 5. Expert Tab
@@ -921,6 +929,24 @@ class HideMeOfficialUI(QMainWindow):
             self.nav_btns["Debug Console"].setVisible(is_enabled)
             if not is_enabled and self.stacked.currentIndex() == 7: 
                 self.switch_page("Settings")
+
+    def toggle_incognito(self):
+        self.app_settings["incognito_mode"] = self.chk_incognito.isChecked()
+        self.save_app_settings()
+
+    def wipe_traces(self):
+        """Securely deletes all logs and connection history if Incognito mode is enabled."""
+        if self.app_settings.get("incognito_mode", False):
+            self.log_entries = []
+            
+            if hasattr(self, 'txt_debug'):
+                self.txt_debug.clear()
+            
+            if os.path.exists(LOG_FILE):
+                try:
+                    os.remove(LOG_FILE)
+                except Exception as e:
+                    self.log_debug(f"Failed to wipe log file: {e}", logging.ERROR)
 
     def setup_system(self):
         page = QWidget()
@@ -1126,10 +1152,17 @@ class HideMeOfficialUI(QMainWindow):
         menu = QMenu()
         a1 = QAction("Show / Hide App", self); a1.triggered.connect(lambda: self.show() if self.isHidden() else self.hide())
         a2 = QAction("Connect / Disconnect VPN", self); a2.triggered.connect(lambda: self.connect_vpn(None))
-        a3 = QAction("Quit", self); a3.triggered.connect(QApplication.instance().quit)
+        a3 = QAction("Quit", self); a3.triggered.connect(self.force_quit)
         for a in [a1, a2, a3]: menu.addAction(a)
         self.tray_icon.setContextMenu(menu)
         if hasattr(self, 'chk_tray') and self.chk_tray.isChecked(): self.tray_icon.show()
+
+    def force_quit(self):
+        """Action for Quit via System Tray"""
+        if self.is_connected:
+            self.disconnect_vpn()
+        self.wipe_traces()
+        QApplication.instance().quit()
 
     def toggle_tray_visibility(self):
         if self.chk_tray.isChecked(): self.tray_icon.show()
@@ -1160,6 +1193,7 @@ class HideMeOfficialUI(QMainWindow):
             elif reply == QMessageBox.StandardButton.No:
                 # App stoppt VPN und beendet sich hart
                 self.disconnect_vpn()
+                self.wipe_traces()
                 event.accept()
                 QApplication.instance().quit()
             else:
@@ -1172,6 +1206,7 @@ class HideMeOfficialUI(QMainWindow):
                 self.hide()
                 self.send_os_notification("hide.me VPN", "App minimized to system tray.")
             else:
+                self.wipe_traces()
                 event.accept()
                 QApplication.instance().quit()
 
