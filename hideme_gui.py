@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v30)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v31)
 # ==============================================================================
-__version__ = "30.0.0"
+__version__ = "31.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Gemini 3.1 Pro"
 
@@ -1142,29 +1142,38 @@ class HideMeOfficialUI(QMainWindow):
         painter.drawEllipse(4, 4, 56, 56); painter.end()
         return QIcon(pixmap)
 
-    # --- Safe Close Guard ---
+    # --- Safe Close Guard (REWRITTEN & FOOLPROOF) ---
     def closeEvent(self, event):
+        # Wenn VPN aktiv ist: Warnung anzeigen!
         if self.is_connected:
-            if hasattr(self, 'chk_tray') and self.chk_tray.isChecked():
-                reply = QMessageBox.question(self, '🛡️ Safe Close Warning',
-                    "VPN is currently active.\n\nMinimize to taskbar (Yes) or Quit and Disconnect (No)?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
-                if reply == QMessageBox.StandardButton.Yes:
-                    event.ignore(); self.hide()
-                elif reply == QMessageBox.StandardButton.No:
-                    self.disconnect_vpn(); event.accept()
-                else:
-                    event.ignore()
+            reply = QMessageBox.question(self, '🛡️ VPN Active - Safe Close Guard',
+                "Your VPN connection is currently ACTIVE.\n\n"
+                "Do you want to minimize the app to the background to stay protected?\n\n"
+                "• 'Yes' = Minimize to Tray (Stay connected)\n"
+                "• 'No' = Disconnect VPN and Quit completely",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                # App läuft weiter im Hintergrund (Tray)
+                event.ignore()
+                self.hide()
+            elif reply == QMessageBox.StandardButton.No:
+                # App stoppt VPN und beendet sich hart
+                self.disconnect_vpn()
+                event.accept()
+                QApplication.instance().quit()
             else:
-                reply = QMessageBox.warning(self, '⚠️ Safe Close Warning',
-                    "VPN is active and System Tray integration is disabled.\n\nClosing the app will terminate the secure VPN connection.\nAre you sure you want to quit?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                if reply == QMessageBox.StandardButton.Yes:
-                    self.disconnect_vpn(); event.accept()
-                else:
-                    event.ignore()
+                # Abbruch, Fenster bleibt offen
+                event.ignore()
+        # Wenn VPN NICHT aktiv ist: Normales Verhalten
         else:
-            event.accept()
+            if hasattr(self, 'chk_tray') and self.chk_tray.isChecked():
+                event.ignore()
+                self.hide()
+                self.send_os_notification("hide.me VPN", "App minimized to system tray.")
+            else:
+                event.accept()
+                QApplication.instance().quit()
 
     # --- Timer & Network Logic ---
     def update_timer(self):
