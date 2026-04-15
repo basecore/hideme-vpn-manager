@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v44)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v48)
 # ==============================================================================
-__version__ = "44.0.0"
+__version__ = "48.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -12,23 +12,14 @@ import subprocess
 import time
 import random
 import json
-import traceback
 import logging
 import shutil
+import re
+import requests
 
-# --- Fix for QtWebEngine running as root (sudo) ---
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
+# --- Security Flags for QtWebEngine running as root (sudo) ---
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-web-security"
 
-# --- Custom Logger for Debug Console ---
-class QtLogger(logging.Handler):
-    def __init__(self, callback):
-        super().__init__()
-        self.callback = callback
-    def emit(self, record):
-        msg = self.format(record)
-        self.callback(msg)
-
-# --- Platform Specific Imports ---
 try: 
     import pwd
 except ImportError: 
@@ -69,8 +60,6 @@ def auto_install_dependencies():
 
 auto_install_dependencies()
 
-import requests
-import re
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QStackedWidget, 
                              QGridLayout, QFrame, QCheckBox, QLineEdit, 
@@ -83,7 +72,7 @@ from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction, QFont
 
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
-    from PyQt6.QtWebEngineCore import QWebEnginePage
+    from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
     WEB_ENGINE_AVAILABLE = True
 
     class MapPage(QWebEnginePage):
@@ -105,14 +94,14 @@ DASH_FILE = os.path.join(CONFIG_DIR, "dashboard.json")
 FAV_FILE = os.path.join(CONFIG_DIR, "favorites.json")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
-# Updated Coordinates based on actual physical Datacenter locations (IP info)
+# Cleaner Names for the Favorite Buttons & GUI
 SERVER_LIST = {
-    "free-de": {"name": "🇩🇪 Germany (Falkenstein/Frankfurt)", "lat": 50.4779, "lon": 12.3713},
-    "free-fr": {"name": "🇫🇷 France (Paris)", "lat": 48.8566, "lon": 2.3522},
-    "free-nl": {"name": "🇳🇱 Netherlands (Amsterdam)", "lat": 52.3676, "lon": 4.9041},
-    "free-ch": {"name": "🇨🇭 Switzerland (Hünenberg/Zurich)", "lat": 47.1751, "lon": 8.4239},
-    "free-uk": {"name": "🇬🇧 United Kingdom (Reading/London)", "lat": 51.4543, "lon": -0.9781},
-    "free-us": {"name": "🇺🇸 United States (Kansas City)", "lat": 39.0997, "lon": -94.5786}
+    "free-de": {"name": "🇩🇪 Frankfurt (DE)", "lat": 50.4779, "lon": 12.3713},
+    "free-fr": {"name": "🇫🇷 Paris (FR)", "lat": 48.8566, "lon": 2.3522},
+    "free-nl": {"name": "🇳🇱 Amsterdam (NL)", "lat": 52.3676, "lon": 4.9041},
+    "free-ch": {"name": "🇨🇭 Zurich (CH)", "lat": 47.1751, "lon": 8.4239},
+    "free-uk": {"name": "🇬🇧 London (UK)", "lat": 51.4543, "lon": -0.9781},
+    "free-us": {"name": "🇺🇸 Los Angeles (US)", "lat": 39.0997, "lon": -94.5786}
 }
 
 def get_local_subnet():
@@ -125,16 +114,47 @@ def get_local_subnet():
     return "192.168.178.0/24"
 
 def cleanup_zombie_network():
-    is_running = subprocess.run(['pgrep', '-x', 'hide.me'], stdout=subprocess.DEVNULL).returncode == 0
-    if not is_running:
-        try:
-            out = subprocess.check_output(["ip", "link", "show", "vpn"], stderr=subprocess.DEVNULL)
-            if b"vpn" in out:
-                subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL)
-        except: pass
-        try:
-            subprocess.run(["sudo", "hide.me", "disconnect"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except: pass
+    # DEEP CLEAN - Fixes the "file exists" routing errors when switching servers fast!
+    try:
+        subprocess.run(["sudo", "killall", "-9", "hide.me"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        subprocess.run(["sudo", "ip", "route", "flush", "table", "55555"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        
+        out = subprocess.check_output(["ip", "-4", "rule", "show"]).decode()
+        for line in out.splitlines():
+            if "lookup 55555" in line:
+                subprocess.run(["sudo", "ip", "-4", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
+                
+        out_v6 = subprocess.check_output(["ip", "-6", "rule", "show"]).decode()
+        for line in out_v6.splitlines():
+            if "lookup 55555" in line:
+                subprocess.run(["sudo", "ip", "-6", "rule", "delete", "table", "55555"], stderr=subprocess.DEVNULL)
+    except: pass
+
+class QtLogger(logging.Handler):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+    def emit(self, record):
+        msg = self.format(record)
+        self.callback(msg)
+
+class VpnProcessReaderThread(QThread):
+    new_log = pyqtSignal(str)
+    def __init__(self, process):
+        super().__init__()
+        self.process = process
+        self.running = True
+    def run(self):
+        while self.running and self.process and self.process.poll() is None:
+            line = self.process.stdout.readline()
+            if line:
+                self.new_log.emit(line.decode().strip())
+            else:
+                time.sleep(0.1)
+        if self.process and self.process.poll() is not None and self.process.poll() != 0:
+            if self.process.poll() != -9:
+                self.new_log.emit(f"⚠️ CLI Process exited unexpectedly with code {self.process.poll()}")
 
 class VpnMonitorThread(QThread):
     state_changed = pyqtSignal(bool)
@@ -158,7 +178,6 @@ class TrafficThread(QThread):
                 curr_rx, curr_tx = 0, 0
                 with open('/proc/net/dev', 'r') as f:
                     lines = f.readlines()[2:]
-                
                 vpn_active = any(l.split()[0].strip(':').startswith(('tun', 'wg', 'vpn', 'hide')) for l in lines)
                 for line in lines:
                     parts = line.split()
@@ -169,25 +188,21 @@ class TrafficThread(QThread):
                         if not iface.startswith(('en', 'eth', 'wl', 'wlan')): continue
                     curr_rx += int(parts[1])
                     curr_tx += int(parts[9])
-                    
                 rx_speed = curr_rx - last_rx if last_rx > 0 else 0
                 tx_speed = curr_tx - last_tx if last_tx > 0 else 0
                 last_rx, last_tx = curr_rx, curr_tx
-                
                 fmt = lambda b: f"{b/1048576:.2f} MB/s" if b > 1048576 else f"{b/1024:.2f} KB/s"
                 self.traffic_updated.emit(fmt(rx_speed), fmt(tx_speed))
             except: pass
             time.sleep(1)
 
 class IpFetcherThread(QThread):
-    ip_fetched = pyqtSignal(str, str, str, str, bool) # Added param for 'lat,lon' string
+    ip_fetched = pyqtSignal(str, str, str, str, bool) 
     def __init__(self, is_connected):
         super().__init__()
         self.is_connected = is_connected
-
     def run(self):
-        time.sleep(2)
-        
+        time.sleep(2.5)
         try:
             r = requests.get("https://ipinfo.io/json", timeout=4)
             if r.status_code == 200:
@@ -195,7 +210,6 @@ class IpFetcherThread(QThread):
                 self.ip_fetched.emit(data.get('ip', 'Unknown'), data.get('city', 'Unknown'), data.get('country', ''), data.get('loc', ''), self.is_connected)
                 return
         except: pass
-        
         try:
             r = requests.get("http://ip-api.com/json/", timeout=4)
             if r.status_code == 200:
@@ -204,15 +218,6 @@ class IpFetcherThread(QThread):
                 self.ip_fetched.emit(data.get('query', 'Unknown'), data.get('city', 'Unknown'), data.get('countryCode', ''), loc_str, self.is_connected)
                 return
         except: pass
-        
-        try:
-            r = requests.get("https://api.ipify.org?format=json", timeout=4)
-            if r.status_code == 200:
-                data = r.json()
-                self.ip_fetched.emit(data.get('ip', 'Unknown'), "Unknown", "", "", self.is_connected)
-                return
-        except: pass
-
         self.ip_fetched.emit("Error", "Network/Blocked", "", "", self.is_connected)
 
 class PingThread(QThread):
@@ -247,15 +252,6 @@ class BestLocationFinderThread(QThread):
             except: pass
         self.best_found.emit(best_server, lowest_ping)
 
-class UpdateCheckThread(QThread):
-    update_result = pyqtSignal(str)
-    def run(self):
-        try:
-            time.sleep(1.5) 
-            self.update_result.emit("✅ App & CLI are up to date.")
-        except:
-            self.update_result.emit("❌ Failed to check GitHub API.")
-
 class CliAutoUpdateThread(QThread):
     result = pyqtSignal(str)
     def run(self):
@@ -272,12 +268,10 @@ class CardWidget(QFrame):
         self.layout = QVBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.layout.setContentsMargins(15, 15, 15, 15)
-        
         if is_square:
             self.setFixedSize(270, 270)
         else:
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            
         if title:
             title_lbl = QLabel(title)
             title_lbl.setObjectName("CardTitle")
@@ -332,6 +326,8 @@ class HideMeOfficialUI(QMainWindow):
         self.last_connected_combo_text = None
         self.live_map_lat = None
         self.live_map_lon = None
+        self.vpn_subprocess = None
+        self.reader_thread = None
         
         os.makedirs(CONFIG_DIR, exist_ok=True)
         
@@ -378,7 +374,8 @@ class HideMeOfficialUI(QMainWindow):
         else: self.logger.info(msg)
 
     def append_debug_log(self, msg):
-        if hasattr(self, 'txt_debug'): self.txt_debug.append(msg)
+        if hasattr(self, 'txt_debug'): 
+            self.txt_debug.append(msg)
 
     def check_and_install_cli(self):
         try:
@@ -598,6 +595,7 @@ class HideMeOfficialUI(QMainWindow):
             c = CardWidget("Location Map", is_square=True)
             if WEB_ENGINE_AVAILABLE:
                 self.mini_map_view = QWebEngineView()
+                self.mini_map_view.page().settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
                 self.mini_map_view.setPage(MapPage(self.mini_map_view, self.connect_vpn))
                 c.layout.addWidget(self.mini_map_view)
                 self.update_mini_map()
@@ -695,7 +693,6 @@ class HideMeOfficialUI(QMainWindow):
         self.combo_loc.addItems(opts)
         self.combo_loc.setFixedHeight(40)
         
-        # Removed the lightning bolt from the text here as requested!
         btn_ping = QPushButton("Test Ping")
         btn_ping.setFixedHeight(40)
         btn_ping.clicked.connect(self.run_ping)
@@ -719,6 +716,7 @@ class HideMeOfficialUI(QMainWindow):
         
         if WEB_ENGINE_AVAILABLE:
             self.map_view = QWebEngineView()
+            self.map_view.page().settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
             self.map_view.setPage(MapPage(self.map_view, self.connect_vpn))
             layout.addWidget(self.map_view)
             self.update_map_html()
@@ -741,13 +739,16 @@ class HideMeOfficialUI(QMainWindow):
         markers_js = ""
         center_lat, center_lon, zoom = 40, -10, 3
         
+        if not self.is_connected and self.live_map_lat and self.live_map_lon:
+            center_lat, center_lon, zoom = self.live_map_lat, self.live_map_lon, 4
+            markers_js += f"L.circleMarker([{self.live_map_lat}, {self.live_map_lon}], {{radius: 8, fillColor: '#FF4C4C', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map).bindPopup(\"<b style='color:#FF4C4C;'>Your Unprotected Location</b>\");"
+        
         for code, data in SERVER_LIST.items():
             name = data['name'].split(" ")[1] if " " in data['name'] else data['name']
             color = "green" if code == focus_code and self.is_connected else "#2BAEE0"
             lat = data['lat']
             lon = data['lon']
             
-            # If we are connected to this server and we successfully fetched the real live IP coordinates, use them!
             if code == focus_code and self.is_connected:
                 if self.live_map_lat and self.live_map_lon:
                     lat = self.live_map_lat
@@ -759,7 +760,9 @@ class HideMeOfficialUI(QMainWindow):
             m.bindPopup("<b style='color:{color};'>{name}</b><br><br><a href='hideme://{code}' style='display:block; text-align:center; padding:5px; background:#2BAEE0; color:white; text-decoration:none; border-radius:4px;'>Connect</a>");
             """
 
-        html = f"""<!DOCTYPE html><html><head>//unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        html = f"""<!DOCTYPE html><html><head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
         <style>body,html,#map{{height:100%;margin:0;padding:0;background-color:{bg_color};}} .leaflet-popup-content-wrapper{{background:{popup_bg};color:{popup_text};border:1px solid {border};}} .leaflet-popup-tip{{background:{popup_bg};border:1px solid {border};}}</style></head>
         <body><div id="map"></div><script>
         var map=L.map('map',{{zoomControl:true}}).setView([{center_lat}, {center_lon}], {zoom});
@@ -784,8 +787,13 @@ class HideMeOfficialUI(QMainWindow):
             
             center_lat, center_lon, zoom = lat, lon, 3
             markers_js = f"L.circleMarker([{lat}, {lon}], {{radius: 6, fillColor: 'green', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);"
+        elif not self.is_connected and self.live_map_lat and self.live_map_lon:
+            center_lat, center_lon, zoom = self.live_map_lat, self.live_map_lon, 3
+            markers_js = f"L.circleMarker([{self.live_map_lat}, {self.live_map_lon}], {{radius: 6, fillColor: '#FF4C4C', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);"
 
-        html = f"""<!DOCTYPE html><html><head>//unpkg.com/leaflet@1.9.4/dist/leaflet.css"/><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        html = f"""<!DOCTYPE html><html><head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
         <style>body,html,#map{{height:100%;margin:0;padding:0;background-color:{bg_color};}}</style></head>
         <body><div id="map"></div><script>
         var map=L.map('map',{{zoomControl:false, dragging:false, scrollWheelZoom:false}}).setView([{center_lat}, {center_lon}], {zoom});
@@ -838,7 +846,8 @@ class HideMeOfficialUI(QMainWindow):
         l_filt.addStretch(); tabs.addTab(t_filt, "Routing & Filters")
 
         t_adv = QWidget(); l_adv = QVBoxLayout(t_adv)
-        self.chk_debug_mode = QCheckBox("Enable Debug Logging in Console")
+        self.chk_debug_mode = QCheckBox("Enable Background Logging in Console")
+        self.chk_debug_mode.setToolTip("Will show hide.me background logs in the console.")
         self.chk_debug_mode.setChecked(self.app_settings.get("debug_mode", False))
         self.chk_debug_mode.stateChanged.connect(self.toggle_debug_mode)
         self.chk_incognito = QCheckBox("Incognito Mode (Wipe connection logs on exit)")
@@ -872,8 +881,7 @@ class HideMeOfficialUI(QMainWindow):
     def emergency_reset(self):
         self.log_debug("Executing emergency network reset...")
         self.disconnect_vpn()
-        try: subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stderr=subprocess.DEVNULL)
-        except: pass
+        cleanup_zombie_network()
         QMessageBox.information(self, "Reset Complete", "Network interfaces and routes have been forcefully cleared.\nYour internet should work normally again.")
 
     def toggle_debug_mode(self):
@@ -950,8 +958,13 @@ class HideMeOfficialUI(QMainWindow):
         layout.addWidget(QLabel("Info & Updates", objectName="PageHeader"))
         card = CardWidget(is_square=False)
         card.layout.addWidget(QLabel(f"hide.me VPN Manager GUI\nVersion: {__version__} | Date: {__date__}", objectName="PrimaryText"))
+        card.layout.addWidget(QLabel(f"This advanced interface maps CLI capabilities to a modern desktop experience.\nDeveloped as an open source project.", styleSheet="color: #2BAEE0; font-weight: bold; margin-top: 10px; margin-bottom: 20px;"))
+        
         self.btn_update = QPushButton("🔄 Smart Updates: Check GitHub API"); self.btn_update.setFixedHeight(40); self.btn_update.clicked.connect(self.run_update_check)
-        card.layout.addWidget(self.btn_update); card.layout.addStretch(); layout.addWidget(card)
+        btn_git = QPushButton("⭐ View GitHub Repository"); btn_git.setFixedHeight(40); btn_git.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/tree/main"))
+        btn_issues = QPushButton("🐛 Report an Issue / Bug"); btn_issues.setFixedHeight(40); btn_issues.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/issues"))
+        
+        card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git); card.layout.addWidget(btn_issues); card.layout.addStretch(); layout.addWidget(card)
         self.stacked.addWidget(page)
 
     def setup_debug(self):
@@ -1019,33 +1032,30 @@ class HideMeOfficialUI(QMainWindow):
             #ConnectBtn:hover {{ background-color: {btn_hover}; }}
             QLabel, QCheckBox, QRadioButton {{ color: {text_main}; font-size: 13px; }}
             
-            /* --- SOLID COLOR CHECKBOX FIX (V44) --- */
+            /* Guaranteed Visible Dark Blue Checkmarks using Qt's internal native rendering fallback for images */
             QCheckBox::indicator {{
                 width: 16px; height: 16px;
-                background-color: white;
+                background-color: #FFFFFF;
                 border: 2px solid {card_border};
-                border-radius: 4px;
+                border-radius: 3px;
             }}
-            /* When checked, fill it with dark blue/black and add a white border inside */
             QCheckBox::indicator:checked {{
-                background-color: #0F172A;
-                border: 3px solid white; 
-                outline: 1px solid {card_border};
+                background-color: #FFFFFF;
+                /* URL encoded completely black/dark-blue SVG Checkmark without transparency issues */
+                image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230F172A' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
             }}
             
             QRadioButton::indicator {{
                 width: 16px; height: 16px;
-                background-color: white;
+                background-color: #FFFFFF;
                 border: 2px solid {card_border};
-                border-radius: 9px;
+                border-radius: 8px;
             }}
-            /* When checked, fill it with dark blue/black and add a white border inside */
             QRadioButton::indicator:checked {{
-                background-color: #0F172A;
-                border: 4px solid white;
-                outline: 1px solid {card_border};
+                background-color: #FFFFFF;
+                /* URL encoded completely black/dark-blue SVG Circle */
+                image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'><circle cx='12' cy='12' r='7' fill='%230F172A'/></svg>");
             }}
-            /* -------------------------------------- */
             
             QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; font-weight: 500; }}
             QComboBox QAbstractItemView {{ background-color: {bg_main}; color: {text_main}; selection-background-color: {btn_bg}; }}
@@ -1148,7 +1158,6 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'lbl_ip'): 
             self.lbl_ip.setText(f"IPv4\n{ip}\n\nLocation\n{loc_str}")
             
-        # Parse coordinates for live map update
         if loc_str_coords and "," in loc_str_coords:
             try:
                 lat, lon = loc_str_coords.split(",")
@@ -1202,9 +1211,12 @@ class HideMeOfficialUI(QMainWindow):
 
     def disconnect_vpn(self):
         try:
-            subprocess.run(["sudo", "hide.me", "disconnect"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["sudo", "killall", "hide.me"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["sudo", "ip", "link", "delete", "vpn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if self.vpn_subprocess:
+                self.vpn_subprocess.kill()
+                self.vpn_subprocess = None
+            
+            # Deep Cleanup
+            cleanup_zombie_network()
         except: pass
 
     def connect_vpn(self, server_code=None, source_combo=None):
@@ -1230,8 +1242,9 @@ class HideMeOfficialUI(QMainWindow):
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  🔄 Switching...")
             self.disconnect_vpn()
             self.last_connected_combo_text = sel
-            if target_code == "best": QTimer.singleShot(1500, self._start_best_finder)
-            else: QTimer.singleShot(1500, lambda: self._execute_vpn_connection(target_code))
+            
+            if target_code == "best": QTimer.singleShot(2500, self._start_best_finder)
+            else: QTimer.singleShot(2500, lambda: self._execute_vpn_connection(target_code))
             return
 
         self.last_connected_combo_text = sel
@@ -1245,6 +1258,7 @@ class HideMeOfficialUI(QMainWindow):
         self.best_finder.start()
 
     def _execute_vpn_connection(self, server_code):
+        cleanup_zombie_network()
         self.current_connected_server = server_code
         feats = []; split_targets = []
         if hasattr(self, 'chk_kill') and self.chk_kill.isChecked(): feats.append("KS")
@@ -1266,6 +1280,7 @@ class HideMeOfficialUI(QMainWindow):
 
         self.current_features_str = ", ".join(feats) if feats else "None"
         cmd = ["sudo", "hide.me"]
+        
         if split_targets: cmd.extend(["-s", ",".join(split_targets)])
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
@@ -1285,14 +1300,29 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'inp_dpd') and self.inp_dpd.text().strip(): cmd.extend(["--dpd", self.inp_dpd.text().strip()])
         
         cmd.append("connect"); cmd.append(server_code)
+        
         try: 
-            subprocess.Popen(cmd)
+            self.log_debug(f"Executing: {' '.join(cmd)}")
+            self.vpn_subprocess = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            
+            if self.reader_thread and self.reader_thread.isRunning():
+                self.reader_thread.running = False
+                self.reader_thread.wait()
+                
+            self.reader_thread = VpnProcessReaderThread(self.vpn_subprocess)
+            self.reader_thread.new_log.connect(self.log_debug)
+            self.reader_thread.start()
+            
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Connecting...")
         except Exception as e: pass
 
 if __name__ == '__main__':
     if "--no-sandbox" not in sys.argv:
         sys.argv.append("--no-sandbox")
+    
+    # Extra flags for root QtWebEngine permissions
+    if "--disable-web-security" not in sys.argv:
+        sys.argv.append("--disable-web-security")
 
     if not sys.platform.startswith("linux"):
         from PyQt6.QtWidgets import QApplication, QMessageBox
