@@ -20,16 +20,20 @@ While the official hide.me CLI is incredibly powerful, remembering and typing ou
   <img src="gui2.png" alt="Security Filters & Advanced Options" width="400"/>
 </div>
 
-*Left: The Main Dashboard showing real-time IP, Location, and Split-Tunneling.*  
-*Right: The Advanced Options, Automation settings, and Filters.*
+*Left: The Main Dashboard showing real-time IP, Traffic Monitor, Ping Tester, and Split-Tunneling.*  
+*Right: The Advanced Options, Automation settings, and History Log.*
 
 ---
 
 ## ✨ Features
 
+* 📊 **Live Traffic Monitor:** Watch your download and upload speeds (↓ / ↑) in real-time directly on the main dashboard whenever the VPN is active.
+* 🔔 **Native Desktop Notifications:** Get seamless system alerts on your Linux desktop whenever your VPN connects or disconnects, keeping you informed even if the app is minimized.
+* 📶 **Server Ping Tester:** Click the "⚡ Ping" button to instantly check the latency (in milliseconds) to any server before you connect.
 * 🎨 **Brand Design & Accessibility:** Matches the official hide.me dark mode aesthetics. Features form-based, high-contrast status icons (🛡️/⚠️) designed to be **100% colorblind-friendly**.
 * ⬇️ **System Tray Integration:** Minimize the app to your taskbar! The dynamic tray icon shows your connection status at a glance. Right-click the icon to instantly connect, disconnect, or quit.
 * ⚙️ **Full Automation:** Enable **"Launch on system startup"** to securely start the app in the background without typing your sudo password, and toggle **"Auto-connect"** to be protected the second you boot up.
+* 📜 **Connection History Log:** Automatically records timestamps, IP addresses, locations, and VPN states so you can always track when and where you were connected.
 * 🚀 **Zero-Setup Auto-Installer:** Checks if the hide.me CLI is installed upon startup. If not, it automatically downloads and installs it for you.
 * 🔄 **Smart Updates:** Built-in version checker pings the GitHub API to notify you of CLI updates.
 * 🌍 **Visual Server Selection:** Easily pick your desired location using intuitive country flags (e.g., 🇩🇪, 🇫🇷) or use the **Random Server Picker**.
@@ -76,7 +80,7 @@ If you don't have the `hide.me` CLI installed yet, the GUI will prompt you and h
 
 ## ⚙️ How It Works (The Tabs)
 
-The GUI is divided into four easy-to-use tabs:
+The GUI is divided into five easy-to-use tabs:
 
 ### 1. Network
 Manage how your traffic flows. Enable **Split Tunneling** (the app auto-fills your subnet), toggle the **Kill-Switch**, enable **Port-Forwarding**, or force specific tunneling protocols (IPv4 / IPv6).
@@ -87,7 +91,10 @@ Hide.me offers powerful server-side filtering. Use this tab to block Ads, Malwar
 ### 3. Advanced
 For power users. Setup **Autostart & Auto-connect**, load a custom `.yaml` configuration file, change your Access Token path, or specify custom DNS servers (like Cloudflare's `1.1.1.1`).
 
-### 4. About
+### 4. History
+A detailed table view of your past connections. Track exactly at what time you were assigned which IP address and location.
+
+### 5. About
 Quick access to the GitHub repository and issue tracker for reporting bugs or requesting new features.
 
 ---
