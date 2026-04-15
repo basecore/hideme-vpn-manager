@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v37)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v38)
 # ==============================================================================
-__version__ = "37.0.0"
+__version__ = "38.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -49,9 +49,9 @@ def auto_install_dependencies():
         print(" 🔄 DOWNLOADING MISSING PACKAGES (AUTO-INSTALLING) 🔄")
         print("="*70)
         
-        # Check if the system uses 'apt' (Debian/Ubuntu/Mint)
         if shutil.which("apt"):
-            packages = ["python3-pyqt6", "python3-pyqt6.qtwebengine", "python3-requests"]
+            # fonts-noto-color-emoji fixes the missing flags in Ubuntu/Mint!
+            packages = ["python3-pyqt6", "python3-pyqt6.qtwebengine", "python3-requests", "fonts-noto-color-emoji"]
             print("Ubuntu / Linux Mint detected.")
             print("For maximum transparency - the following official system packages will now be installed:")
             for pkg in packages:
@@ -59,26 +59,19 @@ def auto_install_dependencies():
             print("\nStarting 'apt-get install' in the background...\n")
             
             try:
-                # Update package list silently
                 subprocess.run(["apt-get", "update", "-qq"], check=True)
-                
-                # Install packages automatically (the -y flag says 'yes' to prompts)
                 subprocess.run(["apt-get", "install", "-y"] + packages, check=True)
                 
                 print("\n✅ Installation successful! Restarting application seamlessly...\n")
                 print("="*70)
-                
-                # Instantly restart the script to load the new modules
                 os.execv(sys.executable, [sys.executable] + sys.argv)
                 
             except subprocess.CalledProcessError as e:
                 print(f"\n❌ Error during automatic installation: {e}")
-                print("Please try manually in your terminal:")
                 print(f"sudo apt update && sudo apt install -y {' '.join(packages)}")
                 sys.exit(1)
         else:
-            print("Your package manager is not supported for the auto-installer.")
-            print("Please install 'PyQt6', 'PyQt6-WebEngine' and 'requests' manually via your package manager.")
+            print("Please install PyQt6 manually.")
             sys.exit(1)
 
 # Run the auto-installer before anything else
@@ -164,14 +157,27 @@ class TrafficThread(QThread):
             try:
                 curr_rx, curr_tx = 0, 0
                 with open('/proc/net/dev', 'r') as f:
-                    for line in f.readlines()[2:]:
-                        parts = line.split()
-                        iface = parts[0].strip(':')
-                        if iface.startswith('tun') or 'hide' in iface:
-                            curr_rx += int(parts[1]); curr_tx += int(parts[9])
+                    lines = f.readlines()[2:]
+                
+                # Check if any VPN interface is actively generating stats
+                vpn_active = any(l.split()[0].strip(':').startswith(('tun', 'wg', 'vpn', 'hide')) for l in lines)
+                
+                for line in lines:
+                    parts = line.split()
+                    iface = parts[0].strip(':')
+                    
+                    if vpn_active:
+                        if not iface.startswith(('tun', 'wg', 'vpn', 'hide')): continue
+                    else:
+                        if not iface.startswith(('en', 'eth', 'wl', 'wlan')): continue
+                        
+                    curr_rx += int(parts[1])
+                    curr_tx += int(parts[9])
+                    
                 rx_speed = curr_rx - last_rx if last_rx > 0 else 0
                 tx_speed = curr_tx - last_tx if last_tx > 0 else 0
                 last_rx, last_tx = curr_rx, curr_tx
+                
                 fmt = lambda b: f"{b/1048576:.2f} MB/s" if b > 1048576 else f"{b/1024:.2f} KB/s"
                 self.traffic_updated.emit(fmt(rx_speed), fmt(tx_speed))
             except: pass
@@ -202,7 +208,7 @@ class PingThread(QThread):
         self.ping_result.emit("Failed")
 
 class BestLocationFinderThread(QThread):
-    best_found = pyqtSignal(str)
+    best_found = pyqtSignal(str, float)
     def run(self):
         best_server = "free-de"
         lowest_ping = float('inf')
@@ -216,7 +222,7 @@ class BestLocationFinderThread(QThread):
                         lowest_ping = ping_val
                         best_server = code
             except: pass
-        self.best_found.emit(best_server)
+        self.best_found.emit(best_server, lowest_ping)
 
 class UpdateCheckThread(QThread):
     update_result = pyqtSignal(str)
@@ -378,6 +384,7 @@ class HideMeOfficialUI(QMainWindow):
 
     def run_auto_update_if_enabled(self):
         if hasattr(self, 'chk_autoupdate') and self.chk_autoupdate.isChecked():
+            if hasattr(self, 'auto_upd_thread') and self.auto_upd_thread.isRunning(): return
             self.log_debug("Running background CLI auto-update...")
             self.auto_upd_thread = CliAutoUpdateThread()
             self.auto_upd_thread.result.connect(self.log_debug)
@@ -452,7 +459,6 @@ class HideMeOfficialUI(QMainWindow):
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0); main_layout.setSpacing(0)
 
-        # --- TOP BAR ---
         top_bar = QFrame()
         top_bar.setObjectName("TopBar")
         top_bar.setFixedHeight(45)
@@ -475,12 +481,10 @@ class HideMeOfficialUI(QMainWindow):
         top_layout.addWidget(btn_bug)
         main_layout.addWidget(top_bar)
 
-        # --- BODY ---
         body_layout = QHBoxLayout()
         body_layout.setSpacing(0)
         main_layout.addLayout(body_layout)
 
-        # --- SIDEBAR ---
         sidebar = QFrame()
         sidebar.setObjectName("SideBar")
         sidebar.setFixedWidth(230)
@@ -506,12 +510,10 @@ class HideMeOfficialUI(QMainWindow):
         sidebar_layout.addWidget(lbl_acc)
         body_layout.addWidget(sidebar)
 
-        # --- MAIN CONTENT ---
         self.stacked = QStackedWidget()
         self.stacked.setObjectName("MainContent")
         body_layout.addWidget(self.stacked)
         
-        # Load all pages
         self.setup_dashboard()
         self.setup_locations()
         self.setup_map()
@@ -947,18 +949,12 @@ class HideMeOfficialUI(QMainWindow):
         self.save_app_settings()
 
     def wipe_traces(self):
-        """Securely deletes all logs and connection history if Incognito mode is enabled."""
         if self.app_settings.get("incognito_mode", False):
             self.log_entries = []
-            
-            if hasattr(self, 'txt_debug'):
-                self.txt_debug.clear()
-            
+            if hasattr(self, 'txt_debug'): self.txt_debug.clear()
             if os.path.exists(LOG_FILE):
-                try:
-                    os.remove(LOG_FILE)
-                except Exception as e:
-                    self.log_debug(f"Failed to wipe log file: {e}", logging.ERROR)
+                try: os.remove(LOG_FILE)
+                except: pass
 
     def setup_system(self):
         page = QWidget()
@@ -1062,6 +1058,7 @@ class HideMeOfficialUI(QMainWindow):
         self.stacked.addWidget(page)
 
     def run_update_check(self):
+        if hasattr(self, 'upd_thread') and self.upd_thread.isRunning(): return
         self.log_debug("Manual API update check initiated...")
         self.btn_update.setText("Checking GitHub API...")
         self.upd_thread = UpdateCheckThread()
@@ -1088,18 +1085,14 @@ class HideMeOfficialUI(QMainWindow):
 
     def apply_styles(self):
         is_dark = (self.current_theme == "dark")
-        
         bg_main = "#0D1623" if is_dark else "#F3F5F7"
         bg_top = "#0A111A" if is_dark else "#172B40"
         bg_side = "#111E2D" if is_dark else "#27B4E6"
-        
         text_main = "white" if is_dark else "#0F172A"
         text_side = "#8B9BB4" if is_dark else "white"
         text_sub = "#8B9BB4" if is_dark else "#64748B"
-        
         card_bg = "#132233" if is_dark else "white"
         card_border = "#1C2E42" if is_dark else "#E2E8F0"
-        
         btn_bg = "#2BAEE0" if is_dark else "#27B4E6"
         btn_hover = "#1A9BD0" if is_dark else "#1DA1D1"
         
@@ -1109,36 +1102,27 @@ class HideMeOfficialUI(QMainWindow):
             #LogoText {{ color: white; font-weight: bold; font-size: 14px; margin-left: 10px; }}
             #TopIconBtn {{ background: transparent; color: white; font-size: 16px; border: none; padding: 5px 10px; }}
             #TopIconBtn:hover {{ background: rgba(255,255,255,0.1); border-radius: 4px; }}
-            
             #SideBar {{ background-color: {bg_side}; }}
             #SideBar QPushButton {{ background-color: transparent; color: {text_side}; text-align: left; padding: 15px 20px; font-size: 14px; border: none; font-weight: bold; }}
             #SideBar QPushButton:hover {{ background-color: rgba(255,255,255,0.1); color: white; }}
             #SideBar QPushButton:checked {{ background-color: rgba(0,0,0,0.15); color: white; border-left: 4px solid white; }}
-            
             #PageHeader {{ font-size: 22px; color: {text_main}; font-weight: bold; margin-bottom: 10px; }}
             #Card {{ background-color: {card_bg}; border-radius: 6px; border: 1px solid {card_border}; }}
             #CardTitle {{ color: {text_sub}; font-size: 13px; font-weight: bold; margin-bottom: 5px; }}
             #PrimaryText {{ color: {text_main}; font-weight: bold; font-size: 14px; margin-bottom: 5px; }}
-            
             #ConnectBtn {{ background-color: {btn_bg}; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px; }}
             #ConnectBtn:hover {{ background-color: {btn_hover}; }}
-            
             QLabel, QCheckBox, QRadioButton {{ color: {text_main}; font-size: 13px; }}
-            
             QLineEdit, QComboBox {{ padding: 8px; border: 1px solid {card_border}; border-radius: 4px; background: {bg_main}; color: {text_main}; }}
             QComboBox QAbstractItemView {{ background-color: {bg_main}; color: {text_main}; selection-background-color: {btn_bg}; }}
-            
             QTabWidget::pane {{ border: 1px solid {card_border}; background: {card_bg}; }}
             QTabBar::tab {{ background: {bg_main}; color: {text_sub}; padding: 10px 20px; border: 1px solid {card_border}; }}
             QTabBar::tab:selected {{ background: {card_bg}; color: {text_main}; font-weight: bold; border-bottom: none; }}
-            
             QTableWidget {{ background: {card_bg}; color: {text_main}; gridline-color: {card_border}; border: none; }}
             QHeaderView::section {{ background: {bg_main}; color: {text_sub}; border: none; padding: 5px; }}
-            
             QMessageBox {{ background-color: {card_bg}; color: {text_main}; }}
             QPushButton {{ background-color: {bg_main}; color: {text_main}; padding: 8px; border-radius: 4px; border: 1px solid {card_border}; font-weight:bold; }}
             QPushButton:hover {{ background-color: {card_bg}; }}
-            
             QToolTip {{ color: #ffffff; background-color: #132233; border: 1px solid #2BAEE0; font-size: 12px; padding: 4px; }}
         """
         self.setStyleSheet(css)
@@ -1186,7 +1170,6 @@ class HideMeOfficialUI(QMainWindow):
         painter.drawEllipse(4, 4, 56, 56); painter.end()
         return QIcon(pixmap)
 
-    # --- Safe Close Guard ---
     def closeEvent(self, event):
         if self.is_connected:
             reply = QMessageBox.question(self, '🛡️ VPN Active - Safe Close Guard',
@@ -1216,52 +1199,61 @@ class HideMeOfficialUI(QMainWindow):
                 event.accept()
                 QApplication.instance().quit()
 
-    # --- Timer & Network Logic ---
     def update_timer(self):
         elapsed = int(time.time() - self.conn_start_time)
         hrs, rem = divmod(elapsed, 3600); mins, secs = divmod(rem, 60)
-        if hasattr(self, 'btn_connect'):
+        if hasattr(self, 'btn_connect') and self.btn_connect.text().startswith("  🔒"):
             self.btn_connect.setText(f"  🔒   {hrs:02d}:{mins:02d}:{secs:02d}  ⚡")
 
     def run_ping(self):
         sel = self.combo_loc.currentText()
-        if sel in ["⚡ Best Location", "🎲 Random Location"]: return
-        code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
-        self.lbl_ping_res.setText("Pinging...")
-        self.log_debug(f"Pinging {code}...")
-        self.pinger = PingThread(code)
-        self.pinger.ping_result.connect(self.lbl_ping_res.setText)
-        self.pinger.start()
+        if sel == "🎲 Random Location":
+            self.lbl_ping_res.setText("N/A (Random)")
+            return
+        elif sel == "⚡ Best Location":
+            if hasattr(self, 'ping_best_finder') and self.ping_best_finder.isRunning(): return
+            self.lbl_ping_res.setText("Searching best...")
+            self.ping_best_finder = BestLocationFinderThread()
+            self.ping_best_finder.best_found.connect(self._on_ping_best_found)
+            self.ping_best_finder.start()
+        else:
+            if hasattr(self, 'pinger') and self.pinger.isRunning(): return
+            code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
+            self.lbl_ping_res.setText("Pinging...")
+            self.pinger = PingThread(code)
+            self.pinger.ping_result.connect(self.lbl_ping_res.setText)
+            self.pinger.start()
+
+    def _on_ping_best_found(self, code, ping):
+        name = SERVER_LIST.get(code, {}).get("name", code)
+        self.lbl_ping_res.setText(f"{name} ({int(ping)} ms)")
 
     def fetch_ip(self):
+        if hasattr(self, 'ip_thread') and self.ip_thread.isRunning(): return
         self.ip_thread = IpFetcherThread()
         self.ip_thread.ip_fetched.connect(self.on_ip_fetched)
         self.ip_thread.start()
 
     def on_ip_fetched(self, ip, loc):
-        if hasattr(self, 'lbl_ip'):
-            self.lbl_ip.setText(f"IPv4\n{ip}\n\nLocation\n{loc}")
+        if hasattr(self, 'lbl_ip'): self.lbl_ip.setText(f"IPv4\n{ip}\n\nLocation\n{loc}")
         if self.is_connected: self.add_log_entry("Connected", ip, loc, self.current_features_str)
-        self.log_debug(f"IP Fetched: {ip} - {loc}")
 
     def update_traffic(self, rx, tx):
         if hasattr(self, 'lbl_rx'):
-            self.lbl_rx.setText(f"↓ {rx}")
-            self.lbl_tx.setText(f"↑ {tx}")
+            self.lbl_rx.setText(f"↓ {rx}"); self.lbl_tx.setText(f"↑ {tx}")
 
     def update_ui_state(self, connected):
         self.is_connected = connected
         if connected:
-            self.log_debug(f"VPN Connection Established on {self.current_connected_server}.")
             self.conn_start_time = time.time(); self.timer.start(1000)
             if hasattr(self, 'btn_connect'):
+                self.btn_connect.setText("  🔒   00:00:00  ⚡")
                 self.btn_connect.setStyleSheet("background-color: #8CA93A; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px;")
             self.tray_icon.setIcon(self.create_icon("#8CA93A"))
             self.send_os_notification("hide.me VPN", "Protected! Connection established.")
             self.update_map_html(self.current_connected_server)
             self.update_mini_map()
         else:
-            self.log_debug("VPN Disconnected.")
             self.current_connected_server = None
             self.timer.stop()
             if hasattr(self, 'btn_connect'):
@@ -1275,40 +1267,49 @@ class HideMeOfficialUI(QMainWindow):
         self.fetch_ip()
 
     def disconnect_vpn(self):
-        self.log_debug("Triggering VPN disconnect...")
-        try:
-            subprocess.Popen(["sudo", "killall", "hide.me"])
-        except Exception as e:
-            self.log_debug(f"Killall error: {e}", logging.ERROR)
+        try: subprocess.Popen(["sudo", "killall", "hide.me"])
+        except: pass
 
     def connect_vpn(self, server_code=None, source_combo=None):
+        combo = source_combo if source_combo else (self.combo_loc if hasattr(self, 'combo_loc') else None)
+        sel = combo.currentText() if combo else "⚡ Best Location"
+        
+        if sel == "🎲 Random Location":
+            target_code = random.choice(list(SERVER_LIST.keys()))
+        elif sel == "⚡ Best Location":
+            target_code = "best"
+        else:
+            target_code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
+
         if self.is_connected:
-            self.disconnect_vpn()
-            return
-            
-        if server_code is None:
-            combo = source_combo if source_combo else (self.combo_loc if hasattr(self, 'combo_loc') else None)
-            sel = combo.currentText() if combo else "⚡ Best Location"
-            
-            if sel == "🎲 Random Location":
-                server_code = random.choice(list(SERVER_LIST.keys()))
-                self.log_debug("Selected Random Location.")
-            elif sel == "⚡ Best Location":
-                self.log_debug("Starting Best Location finder...")
-                if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Searching best...")
-                self.best_finder = BestLocationFinderThread()
-                self.best_finder.best_found.connect(self._execute_vpn_connection)
-                self.best_finder.start()
+            if target_code == self.current_connected_server or server_code is not None:
+                self.disconnect_vpn()
                 return
             else:
-                server_code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
+                self.log_debug(f"Seamlessly switching server to {target_code}...")
+                if hasattr(self, 'btn_connect'): self.btn_connect.setText("  🔄 Switching...")
+                self.disconnect_vpn()
+                
+                if target_code == "best":
+                    QTimer.singleShot(1500, self._start_best_finder)
+                else:
+                    QTimer.singleShot(1500, lambda: self._execute_vpn_connection(target_code))
+                return
 
-        self._execute_vpn_connection(server_code)
+        if target_code == "best":
+            self._start_best_finder()
+        else:
+            self._execute_vpn_connection(target_code)
+
+    def _start_best_finder(self):
+        if hasattr(self, 'best_finder') and self.best_finder.isRunning(): return
+        if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Searching best...")
+        self.best_finder = BestLocationFinderThread()
+        self.best_finder.best_found.connect(lambda code, ping: self._execute_vpn_connection(code))
+        self.best_finder.start()
 
     def _execute_vpn_connection(self, server_code):
-        self.log_debug(f"Executing connection command for {server_code}...")
         self.current_connected_server = server_code
-        
         feats = []
         split_targets = []
         
@@ -1337,14 +1338,10 @@ class HideMeOfficialUI(QMainWindow):
         self.current_features_str = ", ".join(feats) if feats else "None"
         
         cmd = ["sudo", "hide.me"]
-        
-        if split_targets:
-            cmd.extend(["-s", ",".join(split_targets)])
-            
+        if split_targets: cmd.extend(["-s", ",".join(split_targets)])
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
         if hasattr(self, 'chk_kill') and not self.chk_kill.isChecked(): cmd.append("-k=false")
-        
         if hasattr(self, 'chk_pf') and self.chk_pf.isChecked(): cmd.append("-pf")
         if hasattr(self, 'chk_ads') and self.chk_ads.isChecked(): cmd.append("-noAds")
         if hasattr(self, 'chk_malware') and self.chk_malware.isChecked(): cmd.append("-noMalware")
@@ -1352,7 +1349,6 @@ class HideMeOfficialUI(QMainWindow):
         if hasattr(self, 'chk_malicious') and self.chk_malicious.isChecked(): cmd.append("--noMalicious")
         if hasattr(self, 'chk_illegal') and self.chk_illegal.isChecked(): cmd.extend(["--noIllegal", "content,warez,spyware,copyright"])
         if hasattr(self, 'chk_safe') and self.chk_safe.isChecked(): cmd.append("--safeSearch")
-        
         if hasattr(self, 'chk_doh') and self.chk_doh.isChecked(): cmd.append("--doh")
         if hasattr(self, 'chk_force_dns') and self.chk_force_dns.isChecked(): cmd.append("--forceDns")
         if hasattr(self, 'inp_dns') and self.inp_dns.text().strip(): cmd.extend(["-d", self.inp_dns.text().strip()])
@@ -1363,14 +1359,19 @@ class HideMeOfficialUI(QMainWindow):
         cmd.append("connect"); cmd.append(server_code)
         
         try: 
-            self.log_debug(f"CMD: {' '.join(cmd)}")
             subprocess.Popen(cmd)
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Connecting...")
         except Exception as e: 
-            self.log_debug(f"Execute error: {e}\n{traceback.format_exc()}", logging.ERROR)
             QMessageBox.critical(self, "Error", f"Failed:\n{e}")
 
 if __name__ == '__main__':
+    # ======================================================================
+    # FIX FOR "Running as root without --no-sandbox is not supported" CRASH!
+    # This natively forces PyQt6 WebEngine to run in sandbox mode securely.
+    # ======================================================================
+    if "--no-sandbox" not in sys.argv:
+        sys.argv.append("--no-sandbox")
+
     if not sys.platform.startswith("linux"):
         from PyQt6.QtWidgets import QApplication, QMessageBox
         app = QApplication(sys.argv)
