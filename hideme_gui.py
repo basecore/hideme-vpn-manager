@@ -404,6 +404,13 @@ class HideMeOfficialUI(QMainWindow):
         self.dash_layout_config = self.load_dash_config()
         self.log_entries = self.load_logs()
         self.app_settings = self.load_app_settings()
+
+# --- NEU: Bekannte, dynamische Servernamen laden ---
+        known_names = self.app_settings.get("known_server_names", {})
+        for code, name in known_names.items():
+            if code in SERVER_LIST:
+                SERVER_LIST[code]["name"] = name
+        # ---------------------------------------------------
         
         self.init_logger()
         self.log_debug("Application initializing...")
@@ -462,6 +469,8 @@ class HideMeOfficialUI(QMainWindow):
     # 2. Emoji-Preservation: Flaggen-Rettung beim Neuladen der CLI-Liste
     def on_servers_fetched(self, new_servers):
         global SERVER_LIST
+        known = self.app_settings.get("known_server_names", {})
+        
         for code, data in new_servers.items():
             if code in SERVER_LIST:
                 data['lat'] = SERVER_LIST[code]['lat']
@@ -471,9 +480,16 @@ class HideMeOfficialUI(QMainWindow):
                     data['flag'] = saved_flag
                     if not data['name'].startswith(saved_flag):
                         data['name'] = f"{saved_flag} {data['name']}"
+                
+                # Namen für den nächsten Neustart merken
+                known[code] = data['name']
                         
         if new_servers:
             SERVER_LIST = new_servers
+            # Gesammelte Namen in die Datei schreiben
+            self.app_settings["known_server_names"] = known
+            self.save_app_settings()
+            
             self.log_debug(f"Loaded {len(SERVER_LIST)} servers dynamically from CLI.")
             self.update_map_html(self.current_connected_server)
             self.update_mini_map()
@@ -1494,13 +1510,18 @@ Comment=Start hide.me VPN Manager on login
                     old_base_name = current_name
                     correct_flag = flag.strip() if flag else SERVER_LIST[self.current_connected_server].get("flag", "🌍")
                     
-                    # Neuer Name wird generiert
                     new_base_name = f"{correct_flag} {city} ({country_code})"
                     SERVER_LIST[self.current_connected_server]["name"] = new_base_name
                     SERVER_LIST[self.current_connected_server]["flag"] = correct_flag
                     self.log_debug(f"Updated location name dynamically to {city}")
                     
-                    # 1. FIX: Status-Banner SOFORT updaten!
+                    # --- NEU: Den aktuellen Namen dauerhaft merken ---
+                    known = self.app_settings.get("known_server_names", {})
+                    known[self.current_connected_server] = new_base_name
+                    self.app_settings["known_server_names"] = known
+                    self.save_app_settings()
+                    # -------------------------------------------------
+                    
                     self.status_banner.setText(f"🔒 PROTECTED - Connected to {new_base_name}")
                     
                     # 2. FIX: Auswahl-Historie synchronisieren, damit das Dropdown nicht "wegspringt"
