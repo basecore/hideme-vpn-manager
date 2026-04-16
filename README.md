@@ -8,6 +8,9 @@
 
 A modern, highly interactive, and feature-rich Graphical User Interface (GUI) for the official **hide.me VPN Linux CLI**. Built with Python and PyQt6, this application seamlessly bridges the raw power of the terminal with a beautiful, customizable desktop experience.
 
+> ⚠️ **Account Support Notice:**
+> This application currently supports **hide.me Free accounts only**. Support for **paid hide.me accounts** is planned and will be added in a future release. Stay tuned for updates!
+
 ## 📖 The Story Behind This Project
 
 While hide.me provides beautiful, fully-featured official GUI applications for Windows and macOS, **Linux users have historically been left with only a command-line interface.** 
