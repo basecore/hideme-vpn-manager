@@ -1026,7 +1026,12 @@ class HideMeOfficialUI(QMainWindow):
         
         # --- NEW ACCOUNT TAB ---
         t_acc = QWidget(); l_acc = QVBoxLayout(t_acc)
-        self.r_free = QRadioButton("Free Plan (Default)"); self.r_paid = QRadioButton("Premium / Paid Account")
+        self.r_free = QRadioButton("Free Plan (Default)")
+        
+        # NEU: Text angepasst und den Button deaktiviert (ausgegraut)
+        self.r_paid = QRadioButton("Premium / Paid Account (Not yet integrated)")
+        self.r_paid.setEnabled(False) 
+        
         is_paid = self.app_settings.get("is_paid", False)
         if is_paid: self.r_paid.setChecked(True)
         else: self.r_free.setChecked(True)
@@ -1053,6 +1058,7 @@ class HideMeOfficialUI(QMainWindow):
         l_acc.addWidget(self.acc_creds_widget); l_acc.addStretch()
         tabs.addTab(t_acc, "Account")
         # -----------------------
+
         
         t_proto = QWidget(); l_proto = QVBoxLayout(t_proto)
         self.r_auto = QRadioButton("Automatic (Recommended)"); self.r_auto.setChecked(True)
