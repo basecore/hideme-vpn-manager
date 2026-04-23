@@ -237,23 +237,44 @@ class IpFetcherThread(QThread):
         super().__init__()
         self.is_connected = is_connected
 
-    def fetch_json(self, url):
-        try:
-            r = requests.get(url, timeout=4)
-            if r.status_code == 200:
-                return r.json()
-        except: pass
+    def fetch_json(self, url, retries=3):
+        for i in range(retries):
+            try:
+                # 5 Sekunden Timeout, falls die Verbindung hängt
+                r = requests.get(url, timeout=5)
+                if r.status_code == 200:
+                    return r.json()
+            except:
+                pass
+            time.sleep(1.5)  # Bei Fehler 1.5 Sekunden warten und erneut versuchen
         return {}
 
     def run(self):
-        time.sleep(2.5)
-        loc = self.fetch_json("https://ipinfo.io/json")
-        ipv4 = self.fetch_json("https://api4.ipify.org?format=json").get("ip", "Not available")
-        ipv6 = self.fetch_json("https://api6.ipify.org?format=json").get("ip", "Not available")
+        # Gib dem VPN etwas Zeit, um DNS und Routen zu setzen
+        time.sleep(3) 
+        
+        # Versuche IPs abzurufen (mit bis zu 3 Wiederholungen)
+        ipv4_data = self.fetch_json("https://api4.ipify.org?format=json", retries=3)
+        ipv4 = ipv4_data.get("ip", "Unavailable")
+        
+        ipv6_data = self.fetch_json("https://api6.ipify.org?format=json", retries=2)
+        ipv6 = ipv6_data.get("ip", "Unavailable")
 
+        # Versuche Standort abzurufen
+        loc = self.fetch_json("https://ipinfo.io/json", retries=3)
         city = loc.get("city", "Unknown")
         country = loc.get("country", "")
         coords = loc.get("loc", "")
+
+        # Fallback: Wenn ipinfo.io blockiert/fehlschlägt, nutze ip-api.com
+        if city == "Unknown" and ipv4 != "Unavailable":
+            fallback = self.fetch_json(f"http://ip-api.com/json/{ipv4}", retries=2)
+            city = fallback.get("city", "Unknown")
+            country = fallback.get("countryCode", "")
+            lat = fallback.get("lat", "")
+            lon = fallback.get("lon", "")
+            if lat and lon:
+                coords = f"{lat},{lon}"
 
         self.ip_fetched.emit(ipv4, ipv6, city, country, coords, self.is_connected)
 
@@ -262,14 +283,24 @@ class PingThread(QThread):
     def __init__(self, server):
         super().__init__()
         self.server = server
+        
     def run(self):
-        try:
-            out = subprocess.check_output(["ping", "-c", "3", "-W", "1", f"{self.server}.hideservers.net"], stderr=subprocess.STDOUT).decode()
-            match = re.search(r'min/avg/max/mdev = [\d\.]+/(.*?)/', out)
-            if match:
-                self.ping_result.emit(f"{int(float(match.group(1)))} ms")
-                return
-        except: pass
+        # Versuche den Ping bis zu 2 Mal, falls DNS noch nicht bereit ist
+        for _ in range(2):
+            try:
+                # -W 2 = Warte bis zu 2 Sekunden auf Antwort
+                out = subprocess.check_output(
+                    ["ping", "-c", "2", "-W", "2", f"{self.server}.hideservers.net"], 
+                    stderr=subprocess.STDOUT
+                ).decode()
+                
+                match = re.search(r'min/avg/max.*? = [\d\.]+/(.*?)/', out)
+                if match:
+                    self.ping_result.emit(f"{int(float(match.group(1)))} ms")
+                    return
+            except: 
+                time.sleep(1.5) # Kurz warten vor dem nächsten Ping-Versuch
+                
         self.ping_result.emit("Failed")
 
 class PingAllServersThread(QThread):
@@ -277,12 +308,16 @@ class PingAllServersThread(QThread):
     def run(self):
         for code in SERVER_LIST.keys():
             try:
-                out = subprocess.check_output(["ping", "-c", "1", "-W", "1", f"{code}.hideservers.net"], stderr=subprocess.STDOUT).decode()
+                out = subprocess.check_output(
+                    ["ping", "-c", "1", "-W", "2", f"{code}.hideservers.net"], 
+                    stderr=subprocess.STDOUT
+                ).decode()
                 match = re.search(r'time=([\d\.]+) ms', out)
                 if match:
                     self.ping_updated.emit(code, f"{int(float(match.group(1)))} ms")
             except:
                 pass
+
 
 class BestLocationFinderThread(QThread):
     best_found = pyqtSignal(str, float)
