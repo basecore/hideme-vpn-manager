@@ -1415,14 +1415,89 @@ Comment=Start hide.me VPN Manager on login
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(self.create_icon("#8B9BB4"))
-        menu = QMenu()
-        a1 = QAction("Show / Hide App", self); a1.triggered.connect(lambda: self.show() if self.isHidden() else self.hide())
-        a2 = QAction("Connect / Disconnect VPN", self); a2.triggered.connect(lambda: self.connect_vpn(None))
-        a3 = QAction("Quit", self); a3.triggered.connect(self.force_quit)
-        for a in [a1, a2, a3]: menu.addAction(a)
-        self.tray_icon.setContextMenu(menu)
-        if hasattr(self, 'chk_tray') and self.chk_tray.isChecked(): self.tray_icon.show()
+        self.tray_icon.activated.connect(self._on_tray_activated)
 
+        self._tray_menu = QMenu()
+
+        # 1. Status
+        self.tray_action_status = QAction("⚠️  Not connected", self)
+        self.tray_action_status.setEnabled(False)
+        self._tray_menu.addAction(self.tray_action_status)
+
+        # 2. IP Info (Echte zwei Zeilen)
+        self.tray_action_ipv4 = QAction("IPv4: Fetching...", self)
+        self.tray_action_ipv4.setEnabled(False)
+        self._tray_menu.addAction(self.tray_action_ipv4)
+        
+        self.tray_action_ipv6 = QAction("IPv6: Fetching...", self)
+        self.tray_action_ipv6.setEnabled(False)
+        self._tray_menu.addAction(self.tray_action_ipv6)
+
+        # 3. Traffic (Echte zwei Zeilen)
+        self.tray_action_speed = QAction("Speed:   ↓ 0.00 B/s   ↑ 0.00 B/s", self)
+        self.tray_action_speed.setEnabled(False)
+        self._tray_menu.addAction(self.tray_action_speed)
+        
+        self.tray_action_session = QAction("Session: ↓ 0.00 B     ↑ 0.00 B", self)
+        self.tray_action_session.setEnabled(False)
+        self._tray_menu.addAction(self.tray_action_session)
+
+        self._tray_menu.addSeparator()
+
+        # 4. Aktionen
+        self.tray_action_toggle = QAction("Show / Hide App", self)
+        self.tray_action_toggle.triggered.connect(self._tray_show_hide)
+        self._tray_menu.addAction(self.tray_action_toggle)
+
+        self.tray_action_connect = QAction("Connect VPN", self)
+        self.tray_action_connect.triggered.connect(self._on_tray_connect_clicked)
+        self._tray_menu.addAction(self.tray_action_connect)
+
+        self.tray_action_quit = QAction("Quit", self)
+        self.tray_action_quit.triggered.connect(self.force_quit)
+        self._tray_menu.addAction(self.tray_action_quit)
+
+        self.tray_icon.setContextMenu(self._tray_menu)
+
+        if hasattr(self, 'chk_tray') and self.chk_tray.isChecked():
+            self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._tray_show_hide()
+
+    def _tray_show_hide(self):
+        if self.isHidden() or self.isMinimized():
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+        else:
+            self.hide()
+
+    def _on_tray_connect_clicked(self):
+        if self.is_connected:
+            self.disconnect_vpn()
+        else:
+            self.connect_vpn(None)
+    def _on_tray_connect_clicked(self):
+        if self.is_connected:
+            self.disconnect_vpn()
+        else:
+            self.connect_vpn(None)
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._tray_show_hide()
+    
+    def _tray_show_hide(self):
+        if self.isHidden() or self.isMinimized():
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+        else:
+            self.hide()
+    
+            
     def force_quit(self):
         if self.is_connected:
             self.disconnect_vpn()
@@ -1472,84 +1547,62 @@ Comment=Start hide.me VPN Manager on login
             code = next((k for k, v in SERVER_LIST.items() if v["name"] == sel), "free-de")
             self.pinger = PingThread(code); self.pinger.ping_result.connect(self.lbl_ping_res.setText); self.pinger.start()
 
-    def fetch_ip(self, connected_state):
-        if not hasattr(self, '_active_ip_threads'): 
-            self._active_ip_threads = []
-        self._active_ip_threads = [t for t in self._active_ip_threads if t.isRunning()]
-        t = IpFetcherThread(connected_state)
-        t.ip_fetched.connect(self.on_ip_fetched)
-        self._active_ip_threads.append(t)
-        t.start()
+    def fetch_ip(self, connected):
+        # Während des Ladens "Fetching..." ins Tray schreiben
+        if hasattr(self, 'tray_action_ipv4'):
+            self.tray_action_ipv4.setText("IPv4: Fetching...")
+            self.tray_action_ipv6.setText("IPv6: Fetching...")
 
-    # 4. Länderflaggen-Korrektur (z.B. bei Falkenstein)
-    def on_ip_fetched(self, ipv4, ipv6, city, country_code, loc_str_coords, was_connected):
-        if was_connected != self.is_connected:
-            return
+        for t in self._active_ip_threads:
+            try: t.quit()
+            except: pass
+        self._active_ip_threads.clear()
 
-        flag = ""
-        if len(country_code) == 2 and country_code.isalpha():
-            flag = ''.join(chr(ord(c) + 127397) for c in country_code.upper()) + " "
-            
-        loc_str = f"{city}, {flag}{country_code}" if country_code else city
-        
+        thread = IpFetcherThread(connected)
+        thread.ip_fetched.connect(self._on_ip_fetched)
+        thread.start()
+        self._active_ip_threads.append(thread)
+
+    def _on_ip_fetched(self, ipv4, ipv6, city, country, coords, is_connected):
+        # Dashboard-Labels aktualisieren
         if hasattr(self, 'lbl_ip4'):
-            self.lbl_ip4.setText(f"IPv4\n{ipv4}\n\nLocation\n{loc_str}")
+            self.lbl_ip4.setText(f"IPv4\n{ipv4}\n\nLocation\n{city}, {country}")
         if hasattr(self, 'lbl_ip6'):
             self.lbl_ip6.setText(f"IPv6\n{ipv6}")
-            
-        if loc_str_coords and "," in loc_str_coords:
-            try:
-                lat, lon = loc_str_coords.split(",")
-                self.live_map_lat = float(lat)
-                self.live_map_lon = float(lon)
-            except: pass
-        else:
-            self.live_map_lat = None
-            self.live_map_lon = None
-            
-        if was_connected: 
-            self.add_log_entry("Connected", ipv4, loc_str, self.current_features_str)
-            if city != "Unknown" and self.current_connected_server in SERVER_LIST:
-                current_name = SERVER_LIST[self.current_connected_server]["name"]
-                if city not in current_name:
-                    
-                    old_base_name = current_name
-                    correct_flag = flag.strip() if flag else SERVER_LIST[self.current_connected_server].get("flag", "🌍")
-                    
-                    new_base_name = f"{correct_flag} {city} ({country_code})"
-                    SERVER_LIST[self.current_connected_server]["name"] = new_base_name
-                    SERVER_LIST[self.current_connected_server]["flag"] = correct_flag
-                    self.log_debug(f"Updated location name dynamically to {city}")
-                    
-                    # --- NEU: Den aktuellen Namen dauerhaft merken ---
-                    known = self.app_settings.get("known_server_names", {})
-                    known[self.current_connected_server] = new_base_name
-                    self.app_settings["known_server_names"] = known
-                    self.save_app_settings()
-                    # -------------------------------------------------
-                    
-                    self.status_banner.setText(f"🔒 PROTECTED - Connected to {new_base_name}")
-                    
-                    # 2. FIX: Auswahl-Historie synchronisieren, damit das Dropdown nicht "wegspringt"
-                    if self.app_settings.get("selected_location", "") == old_base_name:
-                        self.app_settings["selected_location"] = new_base_name
-                        self.save_app_settings()
-                        
-                    if self.last_connected_combo_text and self.last_connected_combo_text.startswith(old_base_name):
-                        self.last_connected_combo_text = new_base_name
-                    
-                    self.refresh_server_dropdowns()
-                    if hasattr(self, 'card_fav'):
-                        self.render_favorites()
-        else:
-            self.add_log_entry("Disconnected", ipv4, loc_str, "Unprotected")
-            
-        self.update_map_html(self.current_connected_server)
-        self.update_mini_map()
 
+        # Karte zentrieren wenn verbunden
+        if coords and is_connected:
+            try:
+                lat, lon = map(float, coords.split(","))
+                self.live_map_lat = lat
+                self.live_map_lon = lon
+                self.update_map_html(self.current_connected_server)
+                self.update_mini_map()
+            except: pass
+
+        # Log-Eintrag
+        self.add_log_entry(
+            "Connected" if is_connected else "Disconnected",
+            ipv4, f"{city}, {country}",
+            self.current_features_str
+        )
+
+        # Tray-IPs direkt über setText aktualisieren
+        if hasattr(self, 'tray_action_ipv4'):
+            self.tray_action_ipv4.setText(f"IPv4: {ipv4}")
+            self.tray_action_ipv6.setText(f"IPv6: {ipv6}")
+            
     def update_traffic(self, rx, tx, total_rx, total_tx):
-        if hasattr(self, 'lbl_rx'): self.lbl_rx.setText(f"↓ {rx}"); self.lbl_tx.setText(f"↑ {tx}")
-        if hasattr(self, 'lbl_session'): self.lbl_session.setText(f"Session: ↓ {total_rx} | ↑ {total_tx}")
+        if hasattr(self, 'lbl_rx'):
+            self.lbl_rx.setText(f"↓ {rx}")
+            self.lbl_tx.setText(f"↑ {tx}")
+        if hasattr(self, 'lbl_session'):
+            self.lbl_session.setText(f"Session: ↓ {total_rx} | ↑ {total_tx}")
+
+        # Update in echten zwei QActions, damit das Menü nicht zugeht!
+        if hasattr(self, 'tray_action_speed'):
+            self.tray_action_speed.setText(f"Speed:   ↓ {rx}   ↑ {tx}")
+            self.tray_action_session.setText(f"Session: ↓ {total_rx}   ↑ {total_tx}")
 
     def update_ui_state(self, connected):
         if self._last_state == connected: return
@@ -1589,6 +1642,18 @@ Comment=Start hide.me VPN Manager on login
             self.send_os_notification("hide.me VPN", "Unprotected! VPN Disconnected.")
             
         self.fetch_ip(connected)
+
+        # Tray-Texte nach Statuswechsel aktualisieren
+        if hasattr(self, 'tray_action_status'):
+            if connected:
+                server_name = SERVER_LIST.get(self.current_connected_server, {}).get("name", self.current_connected_server)
+                self.tray_action_status.setText(f"🔒 Connected: {server_name}")
+                self.tray_action_connect.setText("Disconnect VPN")
+            else:
+                self.tray_action_status.setText("⚠️  Not connected")
+                self.tray_action_connect.setText("Connect VPN")
+                self.tray_action_speed.setText("Speed:   ↓ 0.00 B/s   ↑ 0.00 B/s")
+                self.tray_action_session.setText("Session: ↓ 0.00 B   ↑ 0.00 B")
 
     def disconnect_vpn(self):
         try:
