@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# hide.me VPN Manager GUI - Ultimate Interactive Edition (v51)
+# hide.me VPN Manager GUI - Ultimate Interactive Edition (v52)
 # ==============================================================================
-__version__ = "51.0.0"
+__version__ = "52.0.0"
 __date__ = "April 15, 2026"
 __ai_model__ = "Perplexity / Gemini 3.1 Pro"
 
@@ -20,9 +20,9 @@ import requests
 # --- Security Flags for QtWebEngine running as root (sudo) ---
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-web-security"
 
-try: 
+try:
     import pwd
-except ImportError: 
+except ImportError:
     pass
 
 def open_os_url(url):
@@ -60,12 +60,12 @@ def auto_install_dependencies():
 
 auto_install_dependencies()
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QLabel, QPushButton, QStackedWidget, 
-                             QGridLayout, QFrame, QCheckBox, QLineEdit, 
-                             QComboBox, QSystemTrayIcon, QMenu, QRadioButton, 
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QLabel, QPushButton, QStackedWidget,
+                             QGridLayout, QFrame, QCheckBox, QLineEdit,
+                             QComboBox, QSystemTrayIcon, QMenu, QRadioButton,
                              QTabWidget, QMessageBox, QTableWidget, QTextEdit,
-                             QTableWidgetItem, QHeaderView, QAbstractItemView, 
+                             QTableWidgetItem, QHeaderView, QAbstractItemView,
                              QInputDialog, QDialog, QDialogButtonBox, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QAction, QFont, QPalette
@@ -204,7 +204,7 @@ class TrafficThread(QThread):
                         if not iface.startswith(('en', 'eth', 'wl', 'wlan')): continue
                     curr_rx += int(parts[1])
                     curr_tx += int(parts[9])
-                
+
                 rx_speed = 0 if self.last_rx is None else curr_rx - self.last_rx
                 tx_speed = 0 if self.last_tx is None else curr_tx - self.last_tx
                 self.last_rx, self.last_tx = curr_rx, curr_tx
@@ -232,7 +232,7 @@ class TrafficThread(QThread):
             time.sleep(1)
 
 class IpFetcherThread(QThread):
-    ip_fetched = pyqtSignal(str, str, str, str, str, bool) 
+    ip_fetched = pyqtSignal(str, str, str, str, str, bool)
     def __init__(self, is_connected):
         super().__init__()
         self.is_connected = is_connected
@@ -251,12 +251,12 @@ class IpFetcherThread(QThread):
 
     def run(self):
         # Gib dem VPN etwas Zeit, um DNS und Routen zu setzen
-        time.sleep(3) 
-        
+        time.sleep(3)
+
         # Versuche IPs abzurufen (mit bis zu 3 Wiederholungen)
         ipv4_data = self.fetch_json("https://api4.ipify.org?format=json", retries=3)
         ipv4 = ipv4_data.get("ip", "Unavailable")
-        
+
         ipv6_data = self.fetch_json("https://api6.ipify.org?format=json", retries=2)
         ipv6 = ipv6_data.get("ip", "Unavailable")
 
@@ -283,24 +283,24 @@ class PingThread(QThread):
     def __init__(self, server):
         super().__init__()
         self.server = server
-        
+
     def run(self):
         # Versuche den Ping bis zu 2 Mal, falls DNS noch nicht bereit ist
         for _ in range(2):
             try:
                 # -W 2 = Warte bis zu 2 Sekunden auf Antwort
                 out = subprocess.check_output(
-                    ["ping", "-c", "2", "-W", "2", f"{self.server}.hideservers.net"], 
+                    ["ping", "-c", "2", "-W", "2", f"{self.server}.hideservers.net"],
                     stderr=subprocess.STDOUT
                 ).decode()
-                
+
                 match = re.search(r'min/avg/max.*? = [\d\.]+/(.*?)/', out)
                 if match:
                     self.ping_result.emit(f"{int(float(match.group(1)))} ms")
                     return
-            except: 
+            except:
                 time.sleep(1.5) # Kurz warten vor dem nächsten Ping-Versuch
-                
+
         self.ping_result.emit("Failed")
 
 class PingAllServersThread(QThread):
@@ -309,7 +309,7 @@ class PingAllServersThread(QThread):
         for code in SERVER_LIST.keys():
             try:
                 out = subprocess.check_output(
-                    ["ping", "-c", "1", "-W", "2", f"{code}.hideservers.net"], 
+                    ["ping", "-c", "1", "-W", "2", f"{code}.hideservers.net"],
                     stderr=subprocess.STDOUT
                 ).decode()
                 match = re.search(r'time=([\d\.]+) ms', out)
@@ -385,7 +385,7 @@ class DashboardEditDialog(QDialog):
         self.setWindowTitle("Edit Dashboard Layout")
         self.setFixedSize(400, 550)
         self.layout_selections = []
-        options = ["Quick Connect", "My IP Address", "My Account", "Live Traffic Monitor", 
+        options = ["Quick Connect", "My IP Address", "My Account", "Live Traffic Monitor",
                    "Favourite Locations", "Startpage", "Mini Map", "Empty"]
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
@@ -419,7 +419,7 @@ class HideMeOfficialUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("hide.me VPN Manager")
         self.resize(1150, 750)
-        
+
         self.is_connected = False
         self._last_state = None
         self.current_connected_server = None
@@ -431,9 +431,9 @@ class HideMeOfficialUI(QMainWindow):
         self.vpn_subprocess = None
         self.reader_thread = None
         self._active_ip_threads = []
-        
+
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        
+
         self.current_theme = self.load_theme()
         self.favorites = self.load_favorites()
         self.dash_layout_config = self.load_dash_config()
@@ -446,34 +446,34 @@ class HideMeOfficialUI(QMainWindow):
             if code in SERVER_LIST:
                 SERVER_LIST[code]["name"] = name
         # ---------------------------------------------------
-        
+
         self.init_logger()
         self.log_debug("Application initializing...")
-        
+
         cleanup_zombie_network()
         self.check_and_install_cli()
-        
+
         self.init_ui()
         self.apply_styles()
         self.setup_tray()
-        
+
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_timer)
         self.dashboard_ping_timer = QTimer(self)
         self.dashboard_ping_timer.timeout.connect(self.update_dashboard_ping)
-        
+
         self.monitor_thread = VpnMonitorThread()
         self.monitor_thread.state_changed.connect(self.update_ui_state)
         self.monitor_thread.start()
-        
+
         self.traffic_thread = TrafficThread()
         self.traffic_thread.traffic_updated.connect(self.update_traffic)
         self.traffic_thread.start()
-        
+
         QTimer.singleShot(2000, self.run_auto_update_if_enabled)
         self.fetch_ip(False)
         self.update_account_labels()
-        
+
         self.fetch_servers_background()
         self.start_ping_all()
 
@@ -493,9 +493,9 @@ class HideMeOfficialUI(QMainWindow):
         else: self.logger.info(msg)
 
     def append_debug_log(self, msg):
-        if hasattr(self, 'txt_debug'): 
+        if hasattr(self, 'txt_debug'):
             self.txt_debug.append(msg)
-            
+
     def fetch_servers_background(self):
         self.server_fetcher = ServerListFetcherThread()
         self.server_fetcher.list_fetched.connect(self.on_servers_fetched)
@@ -505,7 +505,7 @@ class HideMeOfficialUI(QMainWindow):
     def on_servers_fetched(self, new_servers):
         global SERVER_LIST
         known = self.app_settings.get("known_server_names", {})
-        
+
         for code, data in new_servers.items():
             if code in SERVER_LIST:
                 data['lat'] = SERVER_LIST[code]['lat']
@@ -515,16 +515,16 @@ class HideMeOfficialUI(QMainWindow):
                     data['flag'] = saved_flag
                     if not data['name'].startswith(saved_flag):
                         data['name'] = f"{saved_flag} {data['name']}"
-                
+
                 # Namen für den nächsten Neustart merken
                 known[code] = data['name']
-                        
+
         if new_servers:
             SERVER_LIST = new_servers
             # Gesammelte Namen in die Datei schreiben
             self.app_settings["known_server_names"] = known
             self.save_app_settings()
-            
+
             self.log_debug(f"Loaded {len(SERVER_LIST)} servers dynamically from CLI.")
             self.update_map_html(self.current_connected_server)
             self.update_mini_map()
@@ -548,22 +548,22 @@ class HideMeOfficialUI(QMainWindow):
         for k, v in SERVER_LIST.items():
             ping_text = f"  ({v['ping']})" if "ping" in v else ""
             opts.append(f"{v['name']}{ping_text}")
-            
+
         saved_loc = self.app_settings.get("selected_location", "⚡ Best Location")
-        
+
         active_opt = saved_loc
         for opt in opts:
             if opt.startswith(saved_loc) or saved_loc.startswith(opt.split("  (")[0]):
                 active_opt = opt
                 break
-                
+
         if hasattr(self, 'dash_combo_loc'):
             self.dash_combo_loc.blockSignals(True)
             self.dash_combo_loc.clear()
             self.dash_combo_loc.addItems(opts)
             self.dash_combo_loc.setCurrentText(active_opt)
             self.dash_combo_loc.blockSignals(False)
-            
+
         if hasattr(self, 'combo_loc'):
             self.combo_loc.blockSignals(True)
             self.combo_loc.clear()
@@ -614,7 +614,7 @@ class HideMeOfficialUI(QMainWindow):
         base_name = text.split("  (")[0] if "  (" in text else text
         self.app_settings["selected_location"] = base_name
         self.save_app_settings()
-        
+
         if hasattr(self, 'dash_combo_loc') and self.dash_combo_loc.currentText() != text:
             self.dash_combo_loc.blockSignals(True)
             self.dash_combo_loc.setCurrentText(text)
@@ -660,7 +660,7 @@ class HideMeOfficialUI(QMainWindow):
     def save_logs(self):
         if getattr(self, 'is_shutting_down', False):
             return
-        with open(LOG_FILE, "w") as f: 
+        with open(LOG_FILE, "w") as f:
             json.dump(self.log_entries[-50:], f)
 
     def add_log_entry(self, state, ip, location, features="-"):
@@ -689,20 +689,20 @@ class HideMeOfficialUI(QMainWindow):
         top_bar.setObjectName("TopBar")
         top_bar.setFixedHeight(45)
         top_layout = QHBoxLayout(top_bar)
-        
+
         top_layout.addWidget(QLabel("hide.me VPN", objectName="LogoText"))
         top_layout.addStretch()
-        
+
         self.btn_theme = QPushButton("🌙" if self.current_theme == "light" else "☀️")
         self.btn_theme.setObjectName("TopIconBtn")
         self.btn_theme.setToolTip("Toggle Light/Dark Theme")
         self.btn_theme.clicked.connect(self.toggle_theme)
-        
+
         btn_bug = QPushButton("🐛")
         btn_bug.setObjectName("TopIconBtn")
         btn_bug.setToolTip("Report a bug on GitHub")
         btn_bug.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/issues"))
-        
+
         top_layout.addWidget(self.btn_theme)
         top_layout.addWidget(btn_bug)
         main_layout.addWidget(top_bar)
@@ -721,7 +721,7 @@ class HideMeOfficialUI(QMainWindow):
         sidebar.setFixedWidth(230)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 15, 0, 15); sidebar_layout.setSpacing(5)
-        
+
         self.nav_btns = {}
         menu_items = ["Dashboard", "Locations", "Map", "Settings", "System", "Logs", "Info", "Debug Console"]
         for item in menu_items:
@@ -730,10 +730,10 @@ class HideMeOfficialUI(QMainWindow):
             btn.clicked.connect(lambda checked, i=item: self.switch_page(i))
             self.nav_btns[item] = btn
             sidebar_layout.addWidget(btn)
-            
+
         self.nav_btns["Dashboard"].setChecked(True)
         self.nav_btns["Debug Console"].setVisible(self.app_settings.get("debug_mode", False))
-        
+
         sidebar_layout.addStretch()
         self.lbl_sidebar_acc = QLabel("Your Account\nFree Plan")
         self.lbl_sidebar_acc.setStyleSheet("color: white; padding-left: 20px; font-weight: bold;")
@@ -743,7 +743,7 @@ class HideMeOfficialUI(QMainWindow):
         self.stacked = QStackedWidget()
         self.stacked.setObjectName("MainContent")
         body_layout.addWidget(self.stacked)
-        
+
         self.setup_dashboard()
         self.setup_locations()
         self.setup_map()
@@ -765,7 +765,7 @@ class HideMeOfficialUI(QMainWindow):
             item = self.dash_grid.takeAt(0)
             widget = item.widget()
             if widget: widget.deleteLater()
-            
+
         for i, name in enumerate(self.dash_layout_config):
             row = i // 3
             col = i % 3
@@ -792,7 +792,7 @@ class HideMeOfficialUI(QMainWindow):
             c.layout.addWidget(self.btn_connect)
             c.layout.addStretch()
             return c
-            
+
         elif name == "My IP Address":
             c = CardWidget("My IP Address", is_square=True)
             self.lbl_ip4 = QLabel("IPv4\nLoading...\n\nLocation\n-")
@@ -801,7 +801,7 @@ class HideMeOfficialUI(QMainWindow):
             c.layout.addWidget(self.lbl_ip6)
             c.layout.addStretch()
             return c
-            
+
         elif name == "My Account":
             c = CardWidget("My account", is_square=True)
             plan_type = "Premium (Paid)" if self.app_settings.get("is_paid", False) else "Free Plan"
@@ -810,20 +810,20 @@ class HideMeOfficialUI(QMainWindow):
             c.layout.addWidget(self.lbl_dash_account)
             c.layout.addStretch()
             return c
-            
+
         elif name == "Live Traffic Monitor":
             c = CardWidget("Live Traffic Monitor", is_square=True)
             self.lbl_rx = QLabel("↓ 0.00 KB/s")
             self.lbl_tx = QLabel("↑ 0.00 KB/s")
             self.lbl_session = QLabel("Session: ↓ 0.00 MB | ↑ 0.00 MB")
             self.lbl_pingdash = QLabel("Ping: - ms")
-            
+
             ts = "font-family: monospace; font-size: 16px; font-weight: bold; margin-top: 5px;"
             self.lbl_rx.setStyleSheet(ts + "color: #2BAEE0;")
             self.lbl_tx.setStyleSheet(ts + "color: #FF4C4C;")
             self.lbl_session.setStyleSheet("color: #64748B; font-weight: 600; margin-top: 6px;")
             self.lbl_pingdash.setStyleSheet("color: #fbbf24; font-weight: bold; margin-top: 4px;")
-            
+
             c.layout.addWidget(QLabel("Download", objectName="CardTitle"))
             c.layout.addWidget(self.lbl_rx)
             c.layout.addWidget(QLabel("Upload", objectName="CardTitle"))
@@ -832,12 +832,12 @@ class HideMeOfficialUI(QMainWindow):
             c.layout.addWidget(self.lbl_pingdash)
             c.layout.addStretch()
             return c
-            
+
         elif name == "Favourite Locations":
             self.card_fav = CardWidget("Favourite Locations", is_square=True)
             self.render_favorites()
             return self.card_fav
-            
+
         elif name == "Mini Map":
             c = CardWidget("Location Map", is_square=True)
             if WEB_ENGINE_AVAILABLE:
@@ -849,7 +849,7 @@ class HideMeOfficialUI(QMainWindow):
             else:
                 c.layout.addWidget(QLabel("Map Engine missing."))
             return c
-            
+
         elif name == "Startpage":
             c = CardWidget("Startpage", is_square=True)
             c.layout.addWidget(QLabel("Privacy Search\nFollow us on Github"))
@@ -858,7 +858,7 @@ class HideMeOfficialUI(QMainWindow):
             c.layout.addWidget(btn_git)
             c.layout.addStretch()
             return c
-            
+
         else:
             return CardWidget("Empty Slot", is_square=True)
 
@@ -866,7 +866,7 @@ class HideMeOfficialUI(QMainWindow):
         for i in reversed(range(self.card_fav.layout.count())):
             w = self.card_fav.layout.itemAt(i).widget()
             if w and w.objectName() != "CardTitle": w.deleteLater()
-            
+
         for code in self.favorites:
             if code in SERVER_LIST:
                 h = QHBoxLayout()
@@ -877,12 +877,12 @@ class HideMeOfficialUI(QMainWindow):
                 h.addWidget(b); h.addWidget(bx)
                 w = QWidget(); w.setLayout(h)
                 self.card_fav.layout.addWidget(w)
-                
+
         if len(self.favorites) < 3:
             btn_add = QPushButton("+\nAdd favourite location")
             btn_add.clicked.connect(self.add_favorite)
             self.card_fav.layout.addWidget(btn_add)
-            
+
         self.card_fav.layout.addStretch()
 
     def add_favorite(self):
@@ -901,11 +901,59 @@ class HideMeOfficialUI(QMainWindow):
             self.save_favorites()
             self.render_favorites()
 
+    
+    def save_account_settings(self):
+        self.app_settings["is_paid"] = self.r_paid.isChecked()
+        self.app_settings["username"] = self.inp_user.text().strip()
+        self.app_settings["password"] = self.inp_pass.text().strip()
+        self.save_app_settings()
+        self.update_account_labels()
+
+    def test_account_credentials(self):
+        user = self.inp_user.text().strip()
+        pwd = self.inp_pass.text().strip()
+
+        if not user or not pwd:
+            self.lbl_acc_status.setText("Status: Please enter Username and Password!")
+            self.lbl_acc_status.setStyleSheet("color: #FF4C4C; font-weight: bold;")
+            return
+
+        self.lbl_acc_status.setText("Status: Testing... (requesting token)")
+        self.lbl_acc_status.setStyleSheet("color: #fbbf24; font-weight: bold;")
+        self.btn_test_acc.setEnabled(False)
+        QApplication.processEvents()
+
+        # Test command: create token. Use random free server for testing token fetch.
+        test_server = "free-de.hideservers.net"
+
+        try:
+            # hide.me token <username> <password>
+            cmd = ["sudo", "hide.me", "token", "-u", user, "-P", pwd, "-t", "/etc/hide.me/accessToken.txt", test_server]
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+
+            out = process.stdout
+            if "Access-Token request failed" in out or "bad HTTP status 401" in out or "Invalid credentials" in out:
+                self.lbl_acc_status.setText("Status: Failed ❌ (Invalid Username/Password or 401)")
+                self.lbl_acc_status.setStyleSheet("color: #FF4C4C; font-weight: bold;")
+            elif "Access-Token stored" in out or process.returncode == 0:
+                self.lbl_acc_status.setText("Status: Success ✅ (Token generated)")
+                self.lbl_acc_status.setStyleSheet("color: #8CA93A; font-weight: bold;")
+            else:
+                self.lbl_acc_status.setText("Status: Unknown response (Check Logs)")
+                self.lbl_acc_status.setStyleSheet("color: #fbbf24; font-weight: bold;")
+                self.log_debug(f"Token generation output: {out}", logging.WARNING)
+        except Exception as e:
+            self.lbl_acc_status.setText(f"Status: Error ({e})")
+            self.lbl_acc_status.setStyleSheet("color: #FF4C4C; font-weight: bold;")
+
+        self.btn_test_acc.setEnabled(True)
+
+
     def setup_dashboard(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
-        
+
         header_layout = QHBoxLayout()
         header_layout.addWidget(QLabel("Dashboard", objectName="PageHeader"))
         header_layout.addStretch()
@@ -920,7 +968,7 @@ class HideMeOfficialUI(QMainWindow):
         self.dash_grid = QGridLayout(grid_container)
         self.dash_grid.setSpacing(15)
         self.build_dashboard_grid()
-        
+
         layout.addWidget(grid_container, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
         self.stacked.addWidget(page)
@@ -930,11 +978,11 @@ class HideMeOfficialUI(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("Locations", objectName="PageHeader"))
-        
+
         card = CardWidget(is_square=False)
         lbl = QLabel("Filter and select server:"); lbl.setObjectName("CardTitle")
         card.layout.addWidget(lbl)
-        
+
         self.combo_loc = QComboBox()
         opts = ["⚡ Best Location", "🎲 Random Location"] + [v["name"] for v in SERVER_LIST.values()]
         self.combo_loc.addItems(opts)
@@ -942,16 +990,16 @@ class HideMeOfficialUI(QMainWindow):
         saved_loc = self.app_settings.get("selected_location", "⚡ Best Location")
         if saved_loc in opts:
             self.combo_loc.setCurrentText(saved_loc)
-        self.combo_loc.currentTextChanged.connect(self.save_selected_location)       
+        self.combo_loc.currentTextChanged.connect(self.save_selected_location)
         btn_ping = QPushButton("Test Ping")
         btn_ping.setFixedHeight(40)
         btn_ping.clicked.connect(self.run_ping)
         self.lbl_ping_res = QLabel("- ms")
         self.lbl_ping_res.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 14px;")
-        
+
         h_box = QHBoxLayout()
         h_box.addWidget(btn_ping); h_box.addWidget(self.lbl_ping_res); h_box.addStretch()
-        
+
         card.layout.addWidget(self.combo_loc)
         card.layout.addLayout(h_box)
         card.layout.addStretch()
@@ -963,7 +1011,7 @@ class HideMeOfficialUI(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         if WEB_ENGINE_AVAILABLE:
             self.map_view = QWebEngineView()
             self.map_view.page().settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
@@ -974,7 +1022,7 @@ class HideMeOfficialUI(QMainWindow):
             lbl = QLabel("Map Engine unavailable.\nPlease install PyQt6-WebEngine.")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(lbl)
-            
+
         self.stacked.addWidget(page)
 
     def update_map_html(self, focus_code=None):
@@ -987,17 +1035,17 @@ class HideMeOfficialUI(QMainWindow):
         tile_layer = "dark_all" if is_dark else "light_all"
         markers_js = ""
         center_lat, center_lon, zoom = 40, -10, 3
-        
+
         if not self.is_connected and self.live_map_lat and self.live_map_lon:
             center_lat, center_lon, zoom = self.live_map_lat, self.live_map_lon, 4
             markers_js += f"L.circleMarker([{self.live_map_lat}, {self.live_map_lon}], {{radius: 8, fillColor: '#FF4C4C', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map).bindPopup(\"<b style='color:#FF4C4C;'>Your Unprotected Location</b>\");"
-        
+
         for code, data in SERVER_LIST.items():
             name = data['name'].split(" ")[1] if " " in data['name'] else data['name']
             color = "green" if code == focus_code and self.is_connected else "#2BAEE0"
             lat = data['lat']
             lon = data['lon']
-            
+
             if code == focus_code and self.is_connected:
                 if self.live_map_lat and self.live_map_lon:
                     lat = self.live_map_lat
@@ -1025,15 +1073,15 @@ class HideMeOfficialUI(QMainWindow):
         is_dark = (self.current_theme == "dark")
         bg_color = "#132233" if is_dark else "white"
         tile_layer = "dark_all" if is_dark else "light_all"
-        
+
         center_lat, center_lon, zoom = 40, -10, 1
         markers_js = ""
-        
+
         if self.is_connected and self.current_connected_server in SERVER_LIST:
             d = SERVER_LIST[self.current_connected_server]
             lat = self.live_map_lat if self.live_map_lat else d['lat']
             lon = self.live_map_lon if self.live_map_lon else d['lon']
-            
+
             center_lat, center_lon, zoom = lat, lon, 3
             markers_js = f"L.circleMarker([{lat}, {lon}], {{radius: 6, fillColor: 'green', color: 'white', weight: 2, fillOpacity: 1}}).addTo(map);"
         elif not self.is_connected and self.live_map_lat and self.live_map_lon:
@@ -1056,52 +1104,63 @@ class HideMeOfficialUI(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("Settings", objectName="PageHeader"))
-        
+
         tabs = QTabWidget()
-        
+
         # --- NEW ACCOUNT TAB ---
-        t_acc = QWidget(); l_acc = QVBoxLayout(t_acc)
+        t_acc = QWidget()
+        l_acc = QVBoxLayout(t_acc)
+
         self.r_free = QRadioButton("Free Plan (Default)")
-        
-        # NEU: Text angepasst und den Button deaktiviert (ausgegraut)
         self.r_paid = QRadioButton("Premium / Paid Account (Not yet integrated)")
-        self.r_paid.setEnabled(False) 
-        
+        self.r_paid.setEnabled(False)  # Im Moment fix auf Free
+
         is_paid = self.app_settings.get("is_paid", False)
         if is_paid: self.r_paid.setChecked(True)
         else: self.r_free.setChecked(True)
-        
-        self.inp_user = QLineEdit(self.app_settings.get("username", "")); self.inp_user.setPlaceholderText("hide.me Username")
-        self.inp_pass = QLineEdit(self.app_settings.get("password", "")); self.inp_pass.setPlaceholderText("hide.me Password")
-        self.inp_pass.setEchoMode(QLineEdit.EchoMode.Password) 
-        
+
+        self.inp_user = QLineEdit(self.app_settings.get("username", ""))
+        self.inp_user.setPlaceholderText("hide.me Username")
+        self.inp_pass = QLineEdit(self.app_settings.get("password", ""))
+        self.inp_pass.setPlaceholderText("hide.me Password")
+        self.inp_pass.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.btn_test_acc = QPushButton("Test Account Credentials")
+        self.btn_test_acc.clicked.connect(self.test_account_credentials)
+
+        self.lbl_acc_status = QLabel("Status: Not tested")
+        self.lbl_acc_status.setStyleSheet("color: #64748B; font-weight: bold;")
+
         self.r_free.toggled.connect(self.save_account_settings)
         self.r_paid.toggled.connect(self.save_account_settings)
         self.inp_user.textChanged.connect(self.save_account_settings)
         self.inp_pass.textChanged.connect(self.save_account_settings)
-        
+
         l_acc.addWidget(QLabel("Select your hide.me subscription plan:", objectName="CardTitle"))
-        l_acc.addWidget(self.r_free); l_acc.addWidget(self.r_paid)
-        
-        self.acc_creds_widget = QWidget(); l_creds = QVBoxLayout(self.acc_creds_widget); l_creds.setContentsMargins(0,10,0,0)
-        l_creds.addWidget(QLabel("Username:")); l_creds.addWidget(self.inp_user)
-        l_creds.addWidget(QLabel("Password:")); l_creds.addWidget(self.inp_pass)
-        l_creds.addWidget(QLabel("🔒 Credentials are saved locally and passed securely via access tokens.", styleSheet="color: #8CA93A; font-size: 11px; margin-top: 5px;"))
-        self.acc_creds_widget.setVisible(is_paid)
-        self.r_paid.toggled.connect(self.acc_creds_widget.setVisible)
-        
-        l_acc.addWidget(self.acc_creds_widget); l_acc.addStretch()
+        l_acc.addWidget(self.r_free)
+        l_acc.addWidget(self.r_paid)
+
+        l_acc.addWidget(QLabel("Account Credentials (Required for Free & Premium):", objectName="CardTitle"))
+        l_acc.addWidget(QLabel("Username:"))
+        l_acc.addWidget(self.inp_user)
+        l_acc.addWidget(QLabel("Password:"))
+        l_acc.addWidget(self.inp_pass)
+        l_acc.addWidget(self.btn_test_acc)
+        l_acc.addWidget(self.lbl_acc_status)
+
+        l_acc.addWidget(QLabel("🔒 Credentials are saved locally and passed securely via access tokens.", styleSheet="color: #8CA93A; font-size: 11px; margin-top: 5px;"))
+        l_acc.addStretch()
         tabs.addTab(t_acc, "Account")
         # -----------------------
 
-        
+
         t_proto = QWidget(); l_proto = QVBoxLayout(t_proto)
         self.r_auto = QRadioButton("Automatic (Recommended)"); self.r_auto.setChecked(True)
         self.r_v4 = QRadioButton("IPv4 Only (-4)")
         self.r_v6 = QRadioButton("IPv6 Only (-6)")
         for r in [self.r_auto, self.r_v4, self.r_v6]: l_proto.addWidget(r)
         l_proto.addStretch(); tabs.addTab(t_proto, "Protocol")
-        
+
         t_kill = QWidget(); l_kill = QVBoxLayout(t_kill)
         self.chk_kill = QCheckBox("IP Leak Protection (Kill Switch)"); self.chk_kill.setChecked(True)
         self.chk_lan = QCheckBox("Allow local network connections (LAN access)"); self.chk_lan.setChecked(True)
@@ -1111,13 +1170,13 @@ class HideMeOfficialUI(QMainWindow):
         l_kill.addWidget(QLabel("\nExecute custom script when triggered:", objectName="CardTitle"))
         self.inp_script = QLineEdit("/path/to/script.sh"); l_kill.addWidget(self.inp_script)
         l_kill.addStretch(); tabs.addTab(t_kill, "Kill Switch")
-        
+
         t_filt = QWidget(); l_filt = QVBoxLayout(t_filt)
         l_filt.addWidget(QLabel("Split Tunneling (Bypass VPN):", objectName="CardTitle"))
         self.chk_split = QCheckBox("Exclude specific external IP addresses or subnets (-s)")
         self.inp_subnet = QLineEdit(); self.inp_subnet.setPlaceholderText("e.g. 8.8.8.8/32, 10.0.0.0/8")
         l_filt.addWidget(self.chk_split); l_filt.addWidget(self.inp_subnet)
-        
+
         l_filt.addWidget(QLabel("\nStealthGuard & Server Filters:", objectName="CardTitle"))
         self.chk_pf = QCheckBox("Port Forwarding (-pf)")
         self.chk_track = QCheckBox("Block Trackers (-noTrackers)"); self.chk_track.setChecked(True)
@@ -1126,7 +1185,7 @@ class HideMeOfficialUI(QMainWindow):
         self.chk_malicious = QCheckBox("Block Malicious Sites (--noMalicious)")
         self.chk_illegal = QCheckBox("Block Illegal Content (--noIllegal)")
         self.chk_safe = QCheckBox("Enforce SafeSearch (--safeSearch)")
-        for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware, self.chk_malicious, self.chk_illegal, self.chk_safe]: 
+        for c in [self.chk_pf, self.chk_track, self.chk_ads, self.chk_malware, self.chk_malicious, self.chk_illegal, self.chk_safe]:
             l_filt.addWidget(c)
         l_filt.addStretch(); tabs.addTab(t_filt, "Routing & Filters")
 
@@ -1147,12 +1206,12 @@ class HideMeOfficialUI(QMainWindow):
         self.chk_force_dns = QCheckBox("Force DNS handling on VPN server (--forceDns)")
         self.inp_dns = QLineEdit(); self.inp_dns.setPlaceholderText("Custom DNS Servers (comma separated, e.g. 1.1.1.1:53)")
         l_exp.addWidget(self.chk_doh); l_exp.addWidget(self.chk_force_dns); l_exp.addWidget(self.inp_dns)
-        
+
         l_exp.addWidget(QLabel("\nWireGuard & Network Interfaces:", objectName="CardTitle"))
         h_iface = QHBoxLayout(); h_iface.addWidget(QLabel("Interface Name (-i):")); self.inp_iface = QLineEdit(); self.inp_iface.setPlaceholderText("vpn"); h_iface.addWidget(self.inp_iface); l_exp.addLayout(h_iface)
         h_port = QHBoxLayout(); h_port.addWidget(QLabel("Listen Port (-l):")); self.inp_port = QLineEdit(); self.inp_port.setPlaceholderText("Random"); h_port.addWidget(self.inp_port); l_exp.addLayout(h_port)
         h_dpd = QHBoxLayout(); h_dpd.addWidget(QLabel("DPD Timeout (--dpd):")); self.inp_dpd = QLineEdit(); self.inp_dpd.setPlaceholderText("e.g. 1m0s"); h_dpd.addWidget(self.inp_dpd); l_exp.addLayout(h_dpd)
-        
+
         l_exp.addWidget(QLabel("\nTroubleshooting:", objectName="CardTitle"))
         btn_reset = QPushButton("⚠️ Emergency Network Reset (Fix Internet)")
         btn_reset.setStyleSheet("background-color: #FF4C4C; color: white;")
@@ -1182,7 +1241,7 @@ class HideMeOfficialUI(QMainWindow):
         self.save_app_settings()
         if "Debug Console" in self.nav_btns:
             self.nav_btns["Debug Console"].setVisible(is_enabled)
-            if not is_enabled and self.stacked.currentIndex() == 7: 
+            if not is_enabled and self.stacked.currentIndex() == 7:
                 self.switch_page("Settings")
 
     def toggle_incognito(self):
@@ -1197,11 +1256,11 @@ class HideMeOfficialUI(QMainWindow):
         import os
         import shutil
         import subprocess
-        
+
         is_enabled = self.chk_autostart.isChecked()
         self.app_settings["auto_start"] = is_enabled
         self.save_app_settings()
-        
+
         user = os.environ.get("SUDO_USER") or os.environ.get("USER")
         if not user or user == "root":
             user = os.getlogin()
@@ -1210,10 +1269,10 @@ class HideMeOfficialUI(QMainWindow):
         desktop_file = os.path.join(autostart_dir, "hidemegui.desktop")
         sudoers_file = "/etc/sudoers.d/hidemegui_autostart"
         script_path = os.path.abspath(__file__)
-        
+
         if is_enabled:
             sudoers_rule = f"{user} ALL=(ALL) NOPASSWD: /usr/bin/python3 {script_path}\n"
-            
+
             try:
                 with open(sudoers_file, "w") as f:
                     f.write(sudoers_rule)
@@ -1234,16 +1293,16 @@ Comment=Start hide.me VPN Manager on login
 """
             with open(desktop_file, "w") as f:
                 f.write(desktop_content)
-                
+
             try:
                 shutil.chown(desktop_file, user=user)
             except Exception:
                 pass
-                
+
         else:
             if os.path.exists(desktop_file):
                 os.remove(desktop_file)
-            
+
             try:
                 if os.path.exists(sudoers_file):
                     os.remove(sudoers_file)
@@ -1253,22 +1312,22 @@ Comment=Start hide.me VPN Manager on login
     def toggle_auto_update(self):
         self.app_settings["auto_update"] = self.chk_autoupdate.isChecked()
         self.save_app_settings()
-    
+
     def toggle_notif(self):
         self.app_settings["notifications"] = self.chk_notif.isChecked()
         self.save_app_settings()
 
     def wipe_traces(self):
-        self.is_shutting_down = True 
-        
+        self.is_shutting_down = True
+
         if self.app_settings.get("incognito_mode", False):
             self.log_entries = []
-            if hasattr(self, 'txt_debug'): 
+            if hasattr(self, 'txt_debug'):
                 self.txt_debug.clear()
             if os.path.exists(LOG_FILE):
-                try: 
+                try:
                     os.remove(LOG_FILE)
-                except: 
+                except:
                     pass
 
     def setup_system(self):
@@ -1276,26 +1335,26 @@ Comment=Start hide.me VPN Manager on login
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("System", objectName="PageHeader"))
-        
+
         tabs = QTabWidget()
         t_opts = QWidget(); l_opts = QVBoxLayout(t_opts)
-        
+
         self.chk_autostart = QCheckBox("Launch hide.me on system startup")
         self.chk_autostart.setChecked(self.app_settings.get("auto_start", False))
         self.chk_autostart.stateChanged.connect(self.toggle_auto_start)
-        
+
         self.chk_autoconnect = QCheckBox("Auto-connect VPN on app launch")
         self.chk_autoconnect.setChecked(self.app_settings.get("auto_connect", False))
         self.chk_autoconnect.stateChanged.connect(self.toggle_auto_connect)
-        
+
         self.chk_autoupdate = QCheckBox("Auto-check and install CLI updates on startup")
         self.chk_autoupdate.setChecked(self.app_settings.get("auto_update", True))
         self.chk_autoupdate.stateChanged.connect(self.toggle_auto_update)
-        
+
         self.chk_notif = QCheckBox("Enable Native Desktop Notifications")
         self.chk_notif.setChecked(self.app_settings.get("notifications", True))
         self.chk_notif.stateChanged.connect(self.toggle_notif)
-        
+
         self.chk_tray = QCheckBox("System Tray Integration (Minimize to Taskbar)")
         self.chk_tray.setChecked(self.app_settings.get("tray_icon", True))
         self.chk_tray.stateChanged.connect(self.toggle_tray_visibility)
@@ -1304,7 +1363,7 @@ Comment=Start hide.me VPN Manager on login
         l_opts.addWidget(QLabel("\nDesktop Integration:", objectName="CardTitle"))
         for c in [self.chk_notif, self.chk_tray]: l_opts.addWidget(c)
         l_opts.addStretch(); tabs.addTab(t_opts, "Options")
-        
+
         layout.addWidget(tabs)
         self.stacked.addWidget(page)
 
@@ -1313,17 +1372,17 @@ Comment=Start hide.me VPN Manager on login
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 20, 30, 30)
         layout.addWidget(QLabel("Logs & Messages", objectName="PageHeader"))
-        
+
         card = CardWidget(is_square=False)
-        self.log_table = QTableWidget(0, 5) 
+        self.log_table = QTableWidget(0, 5)
         self.log_table.setHorizontalHeaderLabels(["Timestamp", "VPN State", "IP Address", "Location", "Features"])
         self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.log_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        
+
         btn_clear = QPushButton("Clear / Delete Logs")
         btn_clear.clicked.connect(self.clear_logs)
         btn_clear.setFixedWidth(150)
-        
+
         card.layout.addWidget(self.log_table); card.layout.addWidget(btn_clear, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addWidget(card)
         self.stacked.addWidget(page)
@@ -1337,11 +1396,11 @@ Comment=Start hide.me VPN Manager on login
         card = CardWidget(is_square=False)
         card.layout.addWidget(QLabel(f"hide.me VPN Manager GUI\nVersion: {__version__} | Date: {__date__}", objectName="PrimaryText"))
         card.layout.addWidget(QLabel(f"This advanced interface maps CLI capabilities to a modern desktop experience.\nDeveloped as an open source project.", styleSheet="color: #2BAEE0; font-weight: bold; margin-top: 10px; margin-bottom: 20px;"))
-        
+
         self.btn_update = QPushButton("🔄 Smart Updates: Check GitHub API"); self.btn_update.setFixedHeight(40); self.btn_update.clicked.connect(self.run_update_check)
         btn_git = QPushButton("⭐ View GitHub Repository"); btn_git.setFixedHeight(40); btn_git.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/tree/main"))
         btn_issues = QPushButton("🐛 Report an Issue / Bug"); btn_issues.setFixedHeight(40); btn_issues.clicked.connect(lambda: open_os_url("https://github.com/basecore/hideme-vpn-manager/issues"))
-        
+
         card.layout.addWidget(self.btn_update); card.layout.addWidget(btn_git); card.layout.addWidget(btn_issues); card.layout.addStretch(); layout.addWidget(card)
         self.stacked.addWidget(page)
 
@@ -1393,12 +1452,12 @@ Comment=Start hide.me VPN Manager on login
         pagebtntext = "white" if is_dark else "#0F172A"
         pagebtnborder = "#2BAEE0" if is_dark else "#CBD5E1"
         pagebtnhover = "#1C2E42" if is_dark else "#CBD5E1"
-        
+
         palette = QApplication.palette()
         palette.setColor(QPalette.ColorRole.Base, QColor("#FFFFFF"))
         palette.setColor(QPalette.ColorRole.Text, QColor("#0F172A"))
         QApplication.setPalette(palette)
-        
+
         css = f"""
             QMainWindow, #MainContent, QDialog {{ background-color: {bg_main}; }}
             #TopBar {{ background-color: {bg_top}; }}
@@ -1463,7 +1522,7 @@ Comment=Start hide.me VPN Manager on login
         self.tray_action_ipv4 = QAction("IPv4: Fetching...", self)
         self.tray_action_ipv4.setEnabled(False)
         self._tray_menu.addAction(self.tray_action_ipv4)
-        
+
         self.tray_action_ipv6 = QAction("IPv6: Fetching...", self)
         self.tray_action_ipv6.setEnabled(False)
         self._tray_menu.addAction(self.tray_action_ipv6)
@@ -1472,7 +1531,7 @@ Comment=Start hide.me VPN Manager on login
         self.tray_action_speed = QAction("Speed:   ↓ 0.00 B/s   ↑ 0.00 B/s", self)
         self.tray_action_speed.setEnabled(False)
         self._tray_menu.addAction(self.tray_action_speed)
-        
+
         self.tray_action_session = QAction("Session: ↓ 0.00 B     ↑ 0.00 B", self)
         self.tray_action_session.setEnabled(False)
         self._tray_menu.addAction(self.tray_action_session)
@@ -1523,7 +1582,7 @@ Comment=Start hide.me VPN Manager on login
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._tray_show_hide()
-    
+
     def _tray_show_hide(self):
         if self.isHidden() or self.isMinimized():
             self.showNormal()
@@ -1531,8 +1590,8 @@ Comment=Start hide.me VPN Manager on login
             self.activateWindow()
         else:
             self.hide()
-    
-            
+
+
     def force_quit(self):
         if self.is_connected:
             self.disconnect_vpn()
@@ -1626,7 +1685,7 @@ Comment=Start hide.me VPN Manager on login
         if hasattr(self, 'tray_action_ipv4'):
             self.tray_action_ipv4.setText(f"IPv4: {ipv4}")
             self.tray_action_ipv6.setText(f"IPv6: {ipv6}")
-            
+
     def update_traffic(self, rx, tx, total_rx, total_tx):
         if hasattr(self, 'lbl_rx'):
             self.lbl_rx.setText(f"↓ {rx}")
@@ -1642,7 +1701,7 @@ Comment=Start hide.me VPN Manager on login
     def update_ui_state(self, connected):
         if self._last_state == connected: return
         self._last_state = connected
-        
+
         self.is_connected = connected
         if connected:
             self.conn_start_time = time.time(); self.timer.start(1000)
@@ -1658,7 +1717,7 @@ Comment=Start hide.me VPN Manager on login
                 self.btn_connect.setStyleSheet("background-color: #8CA93A; color: white; border-radius: 4px; font-weight: bold; font-size: 16px; border: none; text-align: left; padding-left: 20px;")
             self.tray_icon.setIcon(self.create_icon("#8CA93A"))
             self.send_os_notification("hide.me VPN", "Protected! Connection established.")
-            
+
             self.fetch_servers_background()
         else:
             self.current_connected_server = None
@@ -1672,10 +1731,10 @@ Comment=Start hide.me VPN Manager on login
             self.status_banner.setStyleSheet("background-color: #FF4C4C; color: white; font-weight: bold; font-size: 14px; padding: 6px;")
             if hasattr(self, 'btn_connect'):
                 self.btn_connect.setText("  ⏻   Enable VPN")
-                self.btn_connect.setStyleSheet("") 
+                self.btn_connect.setStyleSheet("")
             self.tray_icon.setIcon(self.create_icon("#8B9BB4"))
             self.send_os_notification("hide.me VPN", "Unprotected! VPN Disconnected.")
-            
+
         self.fetch_ip(connected)
 
         # Tray-Texte nach Statuswechsel aktualisieren
@@ -1705,10 +1764,10 @@ Comment=Start hide.me VPN Manager on login
     def connect_vpn(self, server_code=None, source_combo=None):
         combo = source_combo if source_combo else (self.combo_loc if hasattr(self, 'combo_loc') else None)
         sel = combo.currentText() if combo else "⚡ Best Location"
-        
+
         if sel == "🎲 Random Location": target_code = random.choice(list(SERVER_LIST.keys()))
         elif sel == "⚡ Best Location": target_code = "best"
-        else: 
+        else:
             target_code = "free-de"
             for k, v in SERVER_LIST.items():
                 if sel.startswith(v["name"]):
@@ -1722,7 +1781,7 @@ Comment=Start hide.me VPN Manager on login
                 # 3. FIX: Ping-Werte ignorieren beim Prüfen, ob wir trennen oder wechseln sollen
                 base_sel = sel.split("  (")[0] if "  (" in sel else sel
                 base_last = self.last_connected_combo_text.split("  (")[0] if self.last_connected_combo_text else None
-                
+
                 if base_sel == base_last:
                     self.disconnect_vpn()
                     return
@@ -1734,7 +1793,7 @@ Comment=Start hide.me VPN Manager on login
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  🔄 Switching...")
             self.disconnect_vpn()
             self.last_connected_combo_text = sel
-            
+
             if target_code == "best": QTimer.singleShot(2500, self._start_best_finder)
             else: QTimer.singleShot(2500, lambda: self._execute_vpn_connection(target_code))
             return
@@ -1762,7 +1821,7 @@ Comment=Start hide.me VPN Manager on login
         if hasattr(self, 'chk_illegal') and self.chk_illegal.isChecked(): feats.append("NoIllegal")
         if hasattr(self, 'chk_safe') and self.chk_safe.isChecked(): feats.append("SafeSearch")
         if hasattr(self, 'chk_force_dns') and self.chk_force_dns.isChecked(): feats.append("ForceDNS")
-        
+
         if hasattr(self, 'chk_lan') and self.chk_lan.isChecked():
             lan_val = self.inp_lan.text().strip()
             if lan_val: feats.append("LAN-Bypass"); split_targets.append(lan_val)
@@ -1772,7 +1831,7 @@ Comment=Start hide.me VPN Manager on login
 
         self.current_features_str = ", ".join(feats) if feats else "None"
         cmd = ["sudo", "hide.me"]
-        
+
         if split_targets: cmd.extend(["-s", ",".join(split_targets)])
         if hasattr(self, 'r_v4') and self.r_v4.isChecked(): cmd.append("-4")
         elif hasattr(self, 'r_v6') and self.r_v6.isChecked(): cmd.append("-6")
@@ -1790,9 +1849,9 @@ Comment=Start hide.me VPN Manager on login
         if hasattr(self, 'inp_iface') and self.inp_iface.text().strip(): cmd.extend(["-i", self.inp_iface.text().strip()])
         if hasattr(self, 'inp_port') and self.inp_port.text().strip(): cmd.extend(["-l", self.inp_port.text().strip()])
         if hasattr(self, 'inp_dpd') and self.inp_dpd.text().strip(): cmd.extend(["--dpd", self.inp_dpd.text().strip()])
-        
+
         cmd.append("connect"); cmd.append(server_code)
-        
+
         safe_cmd_log = list(cmd)
         if self.app_settings.get("is_paid", False):
             user = self.app_settings.get("username", "")
@@ -1800,26 +1859,26 @@ Comment=Start hide.me VPN Manager on login
             if user and pwd:
                 cmd.extend(["-username", user, "-password", pwd])
                 safe_cmd_log.extend(["-username", user, "-password", "***SECURE***"])
-        
-        try: 
+
+        try:
             self.log_debug(f"Executing: {' '.join(safe_cmd_log)}")
             self.vpn_subprocess = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            
+
             if self.reader_thread and self.reader_thread.isRunning():
                 self.reader_thread.running = False
                 self.reader_thread.wait()
-                
+
             self.reader_thread = VpnProcessReaderThread(self.vpn_subprocess)
             self.reader_thread.new_log.connect(self.log_debug)
             self.reader_thread.start()
-            
+
             if hasattr(self, 'btn_connect'): self.btn_connect.setText("  Connecting...")
         except Exception as e: pass
 
 if __name__ == '__main__':
     if "--no-sandbox" not in sys.argv:
         sys.argv.append("--no-sandbox")
-    
+
     if "--disable-web-security" not in sys.argv:
         sys.argv.append("--disable-web-security")
 
@@ -1832,11 +1891,11 @@ if __name__ == '__main__':
         msg.setText("This interface is exclusively designed for Linux and the hide.me CLI.")
         msg.exec()
         sys.exit(1)
-        
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
-    
+
     default_font = QApplication.font()
     sys_family = default_font.family()
     families = [f for f in default_font.families() if f != "Noto Color Emoji"]
@@ -1845,7 +1904,7 @@ if __name__ == '__main__':
     families.append("Noto Color Emoji")
     default_font.setFamilies(families)
     app.setFont(default_font)
-    
+
     if hasattr(os, 'geteuid') and os.geteuid() != 0:
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Warning)
@@ -1855,7 +1914,7 @@ if __name__ == '__main__':
                     "sudo python3 hideme_gui.py")
         msg.exec()
         sys.exit(1)
-        
+
     window = HideMeOfficialUI()
     window.show()
     sys.exit(app.exec())
